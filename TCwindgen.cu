@@ -24,13 +24,14 @@ int main()
 	dP = eP - cP;
 
 
-	Vmax = MaxVelModels()
+	//Vmax = MaxVelModels()
 	//Willoughby Wind Speed
 	/*Willoughby & Rahn (2004), Parametric Representation of the Primary
     Hurricane Vortex. Part I: Observations and Evaluation of the
     Holland (1980) Model.  Mon. Wea. Rev., 132, 3033-3048*/
 	Vmax = 0.6252 * sqrt(dP);
 
+	printf("Vmax= %f\n",Vmax);
 	//Holland model
 	/*.. |beta|   unicode:: U+003B2 .. GREEK SMALL LETTER BETA
 
@@ -41,6 +42,6 @@ int main()
 	beta = 1.3;
 	rho = 1.15;
 	Vmax = sqrt(beta * dP / (exp(1.0) * rho));
-
+	printf("Vmax= %f\n", Vmax);
 
 }
