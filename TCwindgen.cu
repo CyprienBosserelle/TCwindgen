@@ -11,11 +11,92 @@
 #include <string.h>
 #include <cmath>
 #include <fstream>
-//#include <netcdf.h>
+#include <netcdf.h>
 #include <algorithm>
 
 #define pi 3.14159265f
 
+
+extern "C" void creatncfile(char outfile[], int nx, int ny, float totaltime, float * xval, float * yval, float *R, float *V, float *Z)
+{
+	int status;
+	int ncid, xx_dim, yy_dim, time_dim, p_dim;
+	size_t nxx, nyy, nnpart;
+	int  var_dimids[3], var_dimzb[2];
+
+	int R_id, time_id, xx_id, yy_id, V_id, Z_id;
+	
+	nxx = nx;
+	nyy = ny;
+	//nnpart=npart;
+
+	static size_t start[] = { 0, 0, 0 }; // start at first value 
+	static size_t count[] = { 1, ny, nx };
+	static size_t zbstart[] = { 0, 0 }; // start at first value 
+	static size_t zbcount[] = { ny, nx };
+	//static size_t pstart[] = {0, 0}; // start at first value 
+	// 	static size_t pcount[] = {1, npart};
+	static size_t tst[] = { 0 };
+	static size_t xstart[] = { 0 }; // start at first value 
+	static size_t xcount[] = { nx };
+	
+	static size_t ystart[] = { 0 }; // start at first value 
+	static size_t ycount[] = { ny };
+
+
+	
+	//create the netcdf dataset
+	status = nc_create(outfile, NC_NOCLOBBER, &ncid);
+
+	//Define dimensions: Name and length
+
+	status = nc_def_dim(ncid, "x", nxx, &xx_dim);
+	status = nc_def_dim(ncid, "y", nyy, &yy_dim);
+	//status = nc_def_dim(ncid, "npart",nnpart,&p_dim);
+	status = nc_def_dim(ncid, "time", NC_UNLIMITED, &time_dim);
+	int tdim[] = { time_dim };
+	int xdim[] = { xx_dim };
+	int ydim[] = { yy_dim };
+	//int pdim[2];
+	//pdim[0]=time_dim;
+	//pdim[1]=p_dim;
+	//define variables: Name, Type,...
+	var_dimids[0] = time_dim;
+	var_dimids[1] = yy_dim;
+	var_dimids[2] = xx_dim;
+	var_dimzb[0] = yy_dim;
+	var_dimzb[1] = xx_dim;
+
+	status = nc_def_var(ncid, "time", NC_FLOAT, 1, tdim, &time_id);
+	status = nc_def_var(ncid, "x", NC_FLOAT, 1, xdim, &xx_id);
+	status = nc_def_var(ncid, "y", NC_FLOAT, 1, ydim, &yy_id);
+
+
+
+	status = nc_def_var(ncid, "R", NC_FLOAT, 3, var_dimids, &R_id);
+	status = nc_def_var(ncid, "V", NC_FLOAT, 3, var_dimids, &V_id);
+	status = nc_def_var(ncid, "Z", NC_FLOAT, 3, var_dimids, &Z_id);
+
+	//put attriute: assign attibute values
+	//nc_put_att
+
+	//End definitions: leave define mode
+	status = nc_enddef(ncid);
+
+	//Provide values for variables
+	status = nc_put_var1_float(ncid, time_id, tst, &totaltime);
+	status = nc_put_vara_float(ncid, xx_id, xstart, xcount, xval);
+	status = nc_put_vara_float(ncid, yy_id, ystart, ycount, yval);
+
+	
+	status = nc_put_vara_float(ncid, R_id, start, count, R);
+	status = nc_put_vara_float(ncid, V_id, start, count, V);
+	status = nc_put_vara_float(ncid, Z_id, start, count, Z);
+	// U, V, P are also needed
+
+	//close and save new file
+	status = nc_close(ncid);
+}
 
 __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TClon, double TClat, float *R)
 {
@@ -44,6 +125,69 @@ __global__ void lonGrid(int nx, float dx, float LonMin, float *Gridlon)
 	if (i < nx)
 	{
 		Gridlon[i] = LonMin+dx*i;
+	}
+}
+
+__global__ void JelesnianskiWindProfile(int nx, int ny, float f, float vMax, float rMax, float *R, float *V,float *Z)
+{
+	//
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+	float Vi, Ri,Zi, sf;
+	sf = (f / abs(f));
+
+	if (ix < nx && iy < ny)
+	{
+		//
+		Ri = R[i];
+		Vi = 2.0f * vMax * rMax * Ri / (rMax *rMax + Ri * Ri) * sf;
+		V[i] = Vi;
+
+		Zi = (sf * 2.0f * vMax * rMax / (rMax *rMax + Ri * Ri) + sf * 2.0f * vMax * rMax * (rMax *rMax - Ri * Ri) /((rMax *rMax + Ri * Ri) * (rMax *rMax + Ri * Ri)));
+		Z[i] = Zi;
+
+	}
+}
+
+__global__ void HubbertWindField(int nx, int ny, float rMax, float *R)
+{
+	//
+	/*lam: Direction(geographic bearing, positive clockwise)
+	from storm centre to the grid.
+	: type  lam : : class :`numpy.ndarray`
+	:param float vFm : Foward speed of the storm(m / s).
+	: param float thetaFm : Forward direction of the storm(geographic
+	bearing, positive clockwise).
+	: param float thetaMax : Bearing of the location of the maximum
+	wind speed, relative to the direction of
+	motion.*/
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+
+	float Km = 0.70;
+	float inflow = 25.0f;
+	float Ri;
+
+	if (ix < nx && iy < ny)
+	{
+		//V = self.velocity(R)
+		Ri = R[i];
+
+		if (Ri < rMax)
+		{
+			inflow = 0;
+		}
+
+		inflow = inflow * pi / 180.0f;
+
+		//thetaMaxAbsolute = thetaFm + thetaMax;
+		//asym = vFm * np.cos(thetaMaxAbsolute - lam + np.pi)
+		//Vsf = Km * Vi + asym
+		//phi = inflow - lam
+		//Ux = Vsf * sinf(phi)
+		//Vy = Vsf * cosf(phi)
 	}
 }
 
@@ -125,6 +269,8 @@ int main(int argc, char **argv)
 	float * Gridlon, * Gridlon_g; // Longitude vector is length of nx
 	float * Gridlat, * Gridlat_g; // Latitude vector isd length of ny
 	float * R, * R_g; // array of distance  is size of nx*ny;
+	float * V, *V_g; // array for Wind velocity
+	float * Z, *Z_g; // array for TC vorticity
 	int nx, ny; //grid dimension
 
 
@@ -141,7 +287,7 @@ int main(int argc, char **argv)
 	CUDA_CHECK(cudaMalloc((void **)&Gridlat_g, ny*sizeof(float)));
 
 	//Following should be quicker on GPU too
-	for (int i = 0; i < nx; i++)
+	/*for (int i = 0; i < nx; i++)
 	{
 		Gridlon[i] = LonMin + i*dlon;
 	}
@@ -149,7 +295,7 @@ int main(int argc, char **argv)
 	for (int j = 0; j < ny; j++)
 	{
 		Gridlat[j] = LatMin + j*dlat;
-	}
+	}*/
 	dim3 blockDim1D(32, 1, 1);// This means that the grid has to be a factor of 16 on both x and y
 	dim3 gridDim1Dlon(ceil((nx*1.0f) / blockDim1D.x), 1, 1);
 	dim3 gridDim1Dlat(ceil((ny*1.0f) / blockDim1D.x), 1, 1);
@@ -157,10 +303,15 @@ int main(int argc, char **argv)
 	lonGrid <<<gridDim1Dlat, blockDim1D, 0 >>>(ny, dlat, LatMin, Gridlat_g);
 
 	CUDA_CHECK(cudaMemcpy(Gridlon, Gridlon_g, nx*sizeof(float), cudaMemcpyDeviceToHost));
+	CUDA_CHECK(cudaMemcpy(Gridlat, Gridlat_g, ny*sizeof(float), cudaMemcpyDeviceToHost));
 
 	// Results parameters 
 	R = (float *)malloc(nx*ny*sizeof(float));
 	CUDA_CHECK(cudaMalloc((void **)&R_g, nx*ny*sizeof(float)));
+	V = (float *)malloc(nx*ny*sizeof(float));
+	CUDA_CHECK(cudaMalloc((void **)&V_g, nx*ny*sizeof(float)));
+	Z = (float *)malloc(nx*ny*sizeof(float));
+	CUDA_CHECK(cudaMalloc((void **)&Z_g, nx*ny*sizeof(float)));
 	printf("Gridlon[0]=%f\tGridlon[nx-1]=%f\n", Gridlon[0], Gridlon[1]);
 	//printf("Gridlat[0]=%f\tGridlat[ny-1]=%f\n", Gridlat[0], Gridlat[1]);
 
@@ -194,7 +345,7 @@ int main(int argc, char **argv)
 
 	// Calculate R from the present cyclone position
 	//calc distance between each i  and i and the TC using haversine formula
-	for (int i = 0; i < nx; i++)
+	/*for (int i = 0; i < nx; i++)
 	{
 		for (int j = 0; j < ny; j++)
 		{
@@ -206,9 +357,9 @@ int main(int argc, char **argv)
 			float c = 2.0f * atan2f(sqrtf(a), sqrtf(1 - a));
 			R[i + j*nx] = c*Rearth;
 		}
-	}
+	}*/
 
-	printf("R[0]=%f\tR[nx*ny-1]=%f\n", R[0], R[nx*ny - 1]);
+	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", R[0], R[nx*ny - 1]);
 
 
 	dim3 blockDim(16, 16, 1);// This means that the grid has to be a factor of 16 on both x and y
@@ -218,8 +369,15 @@ int main(int argc, char **argv)
 	Rdist <<<gridDim, blockDim, 0 >>>(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
+	JelesnianskiWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, R_g, V_g, Z_g);
+	CUDA_CHECK(cudaThreadSynchronize());
+
 	CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
-	printf("R[0]=%f\tR[nx*ny-1]=%f\n", R[0], R[nx*ny - 1]);
+	CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	CUDA_CHECK(cudaMemcpy(Z, Z_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", V[0], V[nx*ny - 1]);
+
+	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, R, V, Z);
 	//Calculate velocity and Vorticity
 	/*
 	E = exp(1);
