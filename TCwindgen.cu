@@ -23,14 +23,43 @@ __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TCl
 	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
 	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
 	unsigned int i = ix + iy*nx;
-	float Rearth = 6372797.560856f;
-	float dlat = (Gridlat[iy] - TClat)*pi / 180.0f;
-	float lat1 = TClat * pi / 180.0f;
-	float lat2 = Gridlat[iy] * pi / 180.0f;
-	float dlon = (Gridlon[ix] - TClon)*pi / 180.0f;
-	float a = sin(dlat / 2)*sin(dlat / 2) + cos(lat1)*cos(lat2)*sin(dlon / 2)*sin(dlon / 2);
-	float c = 2 * atan2f(sqrtf(a), sqrtf(1 - a));
-	R[i] = c*Rearth;
+	if (ix < nx && iy < ny)
+	{
+		float Rearth = 6372797.560856f;
+		float dlat = (Gridlat[iy] - TClat)*pi / 180.0f;
+		float lat1 = TClat * pi / 180.0f;
+		float lat2 = Gridlat[iy] * pi / 180.0f;
+		float dlon = (Gridlon[ix] - TClon)*pi / 180.0f;
+		float a = sinf(dlat / 2.0f)*sinf(dlat / 2.0f) + cosf(lat1)*cosf(lat2)*sinf(dlon / 2.0f)*sinf(dlon / 2.0f);
+		float c = 2.0f * atan2f(sqrtf(a), sqrtf(1.0f - a));
+		R[i] = c*Rearth;
+	}
+}
+
+__global__ void lonGrid(int nx, float dx, float LonMin, float *Gridlon)
+{
+	//
+	unsigned int i = blockIdx.x*blockDim.x + threadIdx.x;
+
+	if (i < nx)
+	{
+		Gridlon[i] = LonMin+dx*i;
+	}
+}
+
+void CUDA_CHECK(cudaError CUDerr)
+{
+
+
+	if( cudaSuccess != CUDerr) {
+
+		fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",        \
+
+		__FILE__, __LINE__, cudaGetErrorString( CUDerr) );
+
+		exit(EXIT_FAILURE);
+
+	}
 }
 
 
@@ -79,7 +108,7 @@ double Vmax_models(int model, double cP, double eP, double beta, double rho)
 	}
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	// Grid parameters
 	double LonMin = 177.0;
@@ -93,19 +122,25 @@ int main()
 	
 	
 	// Generate grid parameters;
-	float * Gridlon; // Longitude vector is length of nx
-	float * Gridlat; // Latitude vector isd length of ny
-	float * R; // array of distance  is size of nx*ny;
+	float * Gridlon, * Gridlon_g; // Longitude vector is length of nx
+	float * Gridlat, * Gridlat_g; // Latitude vector isd length of ny
+	float * R, * R_g; // array of distance  is size of nx*ny;
 	int nx, ny; //grid dimension
 
 
-	nx = ceil((LonMin - LonMax) / dlon); // in case not an exact match then LonMax is extended
-	ny = ceil((LatMin - LatMax) / dlat);
+	nx = ceil((LonMax - LonMin) / dlon); // in case not an exact match then LonMax is extended
+	ny = ceil((LatMax - LatMin) / dlat);
 
+	printf("nx=%i; ny=%i\n", nx, ny);
 	// Allocate on the CPU
 	Gridlon = (float *)malloc(nx*sizeof(float));
 	Gridlat = (float *)malloc(ny*sizeof(float));
 
+	//Allocate on the GPU
+	CUDA_CHECK(cudaMalloc((void **)&Gridlon_g, nx*sizeof(float)));
+	CUDA_CHECK(cudaMalloc((void **)&Gridlat_g, ny*sizeof(float)));
+
+	//Following should be quicker on GPU too
 	for (int i = 0; i < nx; i++)
 	{
 		Gridlon[i] = LonMin + i*dlon;
@@ -115,30 +150,38 @@ int main()
 	{
 		Gridlat[j] = LatMin + j*dlat;
 	}
+	dim3 blockDim1D(32, 1, 1);// This means that the grid has to be a factor of 16 on both x and y
+	dim3 gridDim1Dlon(ceil((nx*1.0f) / blockDim1D.x), 1, 1);
+	dim3 gridDim1Dlat(ceil((ny*1.0f) / blockDim1D.x), 1, 1);
+	lonGrid <<<gridDim1Dlon, blockDim1D, 0 >>>(nx,(float) dlon, (float) LonMin, Gridlon_g);
+	lonGrid <<<gridDim1Dlat, blockDim1D, 0 >>>(ny, dlat, LatMin, Gridlat_g);
+
+	CUDA_CHECK(cudaMemcpy(Gridlon, Gridlon_g, nx*sizeof(float), cudaMemcpyDeviceToHost));
 
 	// Results parameters 
 	R = (float *)malloc(nx*ny*sizeof(float));
-	
-
+	CUDA_CHECK(cudaMalloc((void **)&R_g, nx*ny*sizeof(float)));
+	printf("Gridlon[0]=%f\tGridlon[nx-1]=%f\n", Gridlon[0], Gridlon[1]);
+	//printf("Gridlat[0]=%f\tGridlat[ny-1]=%f\n", Gridlat[0], Gridlat[1]);
 
 	//Cyclone parameters
 	double TClat=-18.0;//Latitude of TC centre
 	double TClon=178.0;//Longitude of TC centre
 
-	double cP = 900; //central pressure hpa
-	double eP = 1013; //Env pressure hpa
-	double rMax = 40; // Radius of maximum wind (km)
+	double cP = 900.0; //central pressure hpa
+	double eP = 1013.0; //Env pressure hpa
+	double rMax = 40.0; // Radius of maximum wind (km)
 
 	//Calculated parameters
 	double dP; //Pressure difference
 	double Vmax; // Max speed
-	double beta=1.3;
+	double beta=1.30;
 	double rho=1.15;
 	float Rearth = 6372797.560856f;
 	float E, d2Vm,f;
 	// convert from hPa to Pa
-	cP = cP * 100;
-	eP = eP * 100;
+	cP = cP * 100.0;
+	eP = eP * 100.0;
 
 	
 	dP = eP - cP;
@@ -159,14 +202,26 @@ int main()
 			float lat1 = TClat * pi / 180.0f;
 			float lat2 = Gridlat[j] * pi / 180.0f;
 			float dlon = (Gridlon[i] - TClon)*pi / 180.0f;
-			float a = sin(dlat / 2)*sin(dlat / 2) + cos(lat1)*cos(lat2)*sin(dlon / 2)*sin(dlon / 2);
-			float c = 2 * atan2f(sqrtf(a), sqrtf(1 - a));
+			float a = sinf(dlat / 2.0f)*sinf(dlat / 2.0f) + cosf(lat1)*cosf(lat2)*sinf(dlon / 2.0f)*sinf(dlon / 2.0f);
+			float c = 2.0f * atan2f(sqrtf(a), sqrtf(1 - a));
 			R[i + j*nx] = c*Rearth;
 		}
 	}
 
-	//Calculate velocity and Vorticity
+	printf("R[0]=%f\tR[nx*ny-1]=%f\n", R[0], R[nx*ny - 1]);
 
+
+	dim3 blockDim(16, 16, 1);// This means that the grid has to be a factor of 16 on both x and y
+	dim3 gridDim(ceil((nx*1.0f) / blockDim.x), ceil((ny*1.0f) / blockDim.y), 1);
+
+
+	Rdist <<<gridDim, blockDim, 0 >>>(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g);
+	CUDA_CHECK(cudaThreadSynchronize());
+
+	CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	printf("R[0]=%f\tR[nx*ny-1]=%f\n", R[0], R[nx*ny - 1]);
+	//Calculate velocity and Vorticity
+	/*
 	E = exp(1);
 	d2Vm = ((beta * dP * (-4 * pow(beta, 3) * dP / rho -
 		(-2 + beta * beta) * E * pow(f * rMax, 2))) /
@@ -178,7 +233,7 @@ int main()
 	aa = ((d2Vm / 2.0 - (-1.0*Vmax / rMax) / rMax) / rMax);
 	bb = (d2Vm - 6 * aa * rMax) / 2.0;
 	cc = -3 * aa * rMax * rMax - 2 * bb * rMax;
-
+	*/
 
 	//delta = pow(rMax / R, beta);
 	//edelta = exp(-1.0*delta)
