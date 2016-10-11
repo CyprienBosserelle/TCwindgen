@@ -98,7 +98,7 @@ extern "C" void creatncfile(char outfile[], int nx, int ny, float totaltime, flo
 	status = nc_close(ncid);
 }
 
-__global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TClon, double TClat, float *R)
+__global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TClon, double TClat, float *R, float *lam)
 {
 	//
 	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
@@ -110,10 +110,16 @@ __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TCl
 		float dlat = (Gridlat[iy] - TClat)*pi / 180.0f;
 		float lat1 = TClat * pi / 180.0f;
 		float lat2 = Gridlat[iy] * pi / 180.0f;
+		
 		float dlon = (Gridlon[ix] - TClon)*pi / 180.0f;
 		float a = sinf(dlat / 2.0f)*sinf(dlat / 2.0f) + cosf(lat1)*cosf(lat2)*sinf(dlon / 2.0f)*sinf(dlon / 2.0f);
 		float c = 2.0f * atan2f(sqrtf(a), sqrtf(1.0f - a));
-		R[i] = c*Rearth;
+		R[i] = c*Rearth/100.0f;//convert to km
+
+		float x = sinf(dlon)*cosf(lat2);
+		float y = cosf(lat1)*sinf(lat2) - sinf(lat1)*cosf(lat2)*cosf(dlon);
+		lam[i] = atan2f(y, x)*180.0f / pi;
+
 	}
 }
 
@@ -150,7 +156,7 @@ __global__ void JelesnianskiWindProfile(int nx, int ny, float f, float vMax, flo
 	}
 }
 
-__global__ void HubbertWindField(int nx, int ny, float rMax, float *R)
+__global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float thetaFm, float *R, float *lam, float *V, float *Uw, float *Vw)
 {
 	//
 	/*lam: Direction(geographic bearing, positive clockwise)
@@ -168,12 +174,18 @@ __global__ void HubbertWindField(int nx, int ny, float rMax, float *R)
 
 	float Km = 0.70;
 	float inflow = 25.0f;
-	float Ri;
+	float Ri,Vi;
+	float lami;
+	float thetaMax = 0.0f;
+
+	float thetaMaxAbsolute, asym, Vsf, phi, Ux, Vy;
 
 	if (ix < nx && iy < ny)
 	{
 		//V = self.velocity(R)
 		Ri = R[i];
+		lami = lam[i]*pi/180.0f;
+		Vi = V[i];
 
 		if (Ri < rMax)
 		{
@@ -182,12 +194,14 @@ __global__ void HubbertWindField(int nx, int ny, float rMax, float *R)
 
 		inflow = inflow * pi / 180.0f;
 
-		//thetaMaxAbsolute = thetaFm + thetaMax;
-		//asym = vFm * np.cos(thetaMaxAbsolute - lam + np.pi)
-		//Vsf = Km * Vi + asym
-		//phi = inflow - lam
-		//Ux = Vsf * sinf(phi)
-		//Vy = Vsf * cosf(phi)
+		thetaMaxAbsolute = thetaFm + thetaMax;
+		asym = vFm * cosf(thetaMaxAbsolute - lami + pi);
+		Vsf = Km * Vi +asym;
+		phi = inflow - lami;
+		Uw[i] = Vsf *sinf(phi);
+		Vw[i] = Vsf *cosf(phi);
+
+
 	}
 }
 
@@ -269,8 +283,10 @@ int main(int argc, char **argv)
 	float * Gridlon, * Gridlon_g; // Longitude vector is length of nx
 	float * Gridlat, * Gridlat_g; // Latitude vector isd length of ny
 	float * R, * R_g; // array of distance  is size of nx*ny;
+	float *lam, *lam_g; // array of bearing (forward azimuth) from TC center to each grid point
 	float * V, *V_g; // array for Wind velocity
 	float * Z, *Z_g; // array for TC vorticity
+	float *Uw, *Vw, *Uw_g, *Vw_g; // Array of U and V wind from the cyclone
 	int nx, ny; //grid dimension
 
 
@@ -308,10 +324,18 @@ int main(int argc, char **argv)
 	// Results parameters 
 	R = (float *)malloc(nx*ny*sizeof(float));
 	CUDA_CHECK(cudaMalloc((void **)&R_g, nx*ny*sizeof(float)));
+	lam = (float *)malloc(nx*ny*sizeof(float));
+	CUDA_CHECK(cudaMalloc((void **)&lam_g, nx*ny*sizeof(float)));
 	V = (float *)malloc(nx*ny*sizeof(float));
 	CUDA_CHECK(cudaMalloc((void **)&V_g, nx*ny*sizeof(float)));
 	Z = (float *)malloc(nx*ny*sizeof(float));
 	CUDA_CHECK(cudaMalloc((void **)&Z_g, nx*ny*sizeof(float)));
+	Uw = (float *)malloc(nx*ny*sizeof(float));
+	CUDA_CHECK(cudaMalloc((void **)&Uw_g, nx*ny*sizeof(float)));
+	Vw = (float *)malloc(nx*ny*sizeof(float));
+	CUDA_CHECK(cudaMalloc((void **)&Vw_g, nx*ny*sizeof(float)));
+
+
 	printf("Gridlon[0]=%f\tGridlon[nx-1]=%f\n", Gridlon[0], Gridlon[1]);
 	//printf("Gridlat[0]=%f\tGridlat[ny-1]=%f\n", Gridlat[0], Gridlat[1]);
 
@@ -322,6 +346,8 @@ int main(int argc, char **argv)
 	double cP = 900.0; //central pressure hpa
 	double eP = 1013.0; //Env pressure hpa
 	double rMax = 40.0; // Radius of maximum wind (km)
+	double vFm = 15.0; //Foward speed of the storm(m / s)
+	double thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
 
 	//Calculated parameters
 	double dP; //Pressure difference
@@ -366,18 +392,27 @@ int main(int argc, char **argv)
 	dim3 gridDim(ceil((nx*1.0f) / blockDim.x), ceil((ny*1.0f) / blockDim.y), 1);
 
 
-	Rdist <<<gridDim, blockDim, 0 >>>(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g);
+	Rdist <<<gridDim, blockDim, 0 >>>(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g, lam_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
 	JelesnianskiWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, R_g, V_g, Z_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
-	CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
-	CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
-	CUDA_CHECK(cudaMemcpy(Z, Z_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	//CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	//CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	//CUDA_CHECK(cudaMemcpy(lam, lam_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", V[0], V[nx*ny - 1]);
 
-	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, R, V, Z);
+
+	HubbertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, (float)vFm, (float)thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
+	CUDA_CHECK(cudaThreadSynchronize());
+
+
+	CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	CUDA_CHECK(cudaMemcpy(Uw, Uw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+
+	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, V, Uw, Vw);
 	//Calculate velocity and Vorticity
 	/*
 	E = exp(1);
