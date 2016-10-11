@@ -182,19 +182,15 @@ __global__ void HollandWindProfile(int nx, int ny, float f, float vMax, float rM
 		if (Ri <= rMax)
 		{
 			Vi = (Ri * (Ri * (Ri * aa + bb) + cc));
+			Zi = Ri * (Ri * 4.0f * aa + 3.0f * bb) + 2.0f * cc;
 		}
 		else
 		{
-			Vi =  (sqrtf((dP * beta / rho)* delta * edelta + (Ri * f / 2.0f)*(Ri * f / 2.0f)) - Ri *abs(f) / 2.0f);
-			Zi = ((sqrt((dP * beta / rho) * delta * edelta + (Ri * f / 2..0f) ** 2)) / R -
-				np.abs(self.f) + edelta *
-				(2 * (beta ** 2) * self.dP * (delta - 1) * delta +
-				self.rho * edelta * (self.f * R) ** 2) /
-				(2 * self.rho * R *
-				np.sqrt(4 * (beta * self.dP / self.rho) * delta * edelta
-				+ (self.f * R) ** 2)))
+			Vi =  (sqrtf((dP * beta / rho) * delta * edelta + (Ri * f / 2.0f)*(Ri * f / 2.0f)) - Ri *abs(f) / 2.0f);
+			Zi = ((sqrtf((dP * beta / rho) * delta * edelta + (Ri * f / 2.0f)*(Ri * f / 2.0f))) / Ri - abs(f) + edelta * (2.0f * (beta * beta) * dP * (delta - 1.0f) * delta + rho * edelta * (f * Ri) *(f * Ri)) / (2.0f * rho * Ri * sqrtf(4.0f * (beta * dP / rho) * delta * edelta + (f * Ri) *(f * Ri))));
 		}
 		V[i] = Vi*f / abs(f);
+		Z[i] = Zi*f / abs(f);
 	}
 
 }
@@ -245,6 +241,64 @@ __global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float th
 		Vw[i] = Vsf *cosf(phi);
 
 
+	}
+}
+
+__global__ void McConochieWindField(int nx, int ny, float rMax, float vMax, float vFm, float thetaFm, float *R, float *lam, float *V, float *Uw, float *Vw)
+{
+	//
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+
+	float Km = 0.70;
+	float inflow = 25.0f;
+	float Ri, Vi;
+	float lami;
+	float thetaMax = 0.0f;
+
+	float thetaMaxAbsolute, asym, Vsf, phi, Ux, Vy,swrf;
+
+	if (ix < nx && iy < ny)
+	{
+		//
+		//V = self.velocity(R)
+		Ri = R[i];
+		lami = lam[i] * pi / 180.0f;
+		Vi = V[i];
+		if (Ri < 1.2f*rMax)
+		{
+			//
+			inflow = 10.0f + 75.0f * (Ri / rMax - 1.0f);
+		}
+		if (Ri < rMax)
+		{
+			//
+			inflow = 10.0f * Ri / rMax;
+		}
+		inflow = inflow*pi / 180.0f;
+
+		thetaMaxAbsolute = thetaFm + thetaMax;
+		phi = inflow - lami;
+
+		asym = (0.5f * (1.0f + cosf(thetaMaxAbsolute - lami)) * vFm * (Vi / vMax));
+		Vsf = Vi + asym;
+
+		swrf = 0.81f;
+		if (Vsf >= 6.0f);
+		{
+			swrf = 0.81f - (2.93f * (Vsf - 6.0f) / 1000.0f);
+		}
+		if (Vsf >= 19.5f)
+		{
+			swrf = 0.77f - (4.31f * (Vsf - 19.5f) / 1000.0f);
+		}
+		if (Vsf > 45.0f)
+		{
+			swrf = 0.66f;
+		}
+		Uw[i] = swrf * Vsf * sinf(phi);
+		Vw[i] = swrf * Vsf * cosf(phi);
 	}
 }
 
@@ -438,16 +492,21 @@ int main(int argc, char **argv)
 	Rdist <<<gridDim, blockDim, 0 >>>(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g, lam_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
-	JelesnianskiWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, R_g, V_g, Z_g);
-	CUDA_CHECK(cudaThreadSynchronize());
+	//JelesnianskiWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, R_g, V_g, Z_g);
+	//CUDA_CHECK(cudaThreadSynchronize());
 
+	HollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, dP, rho, beta, R_g, V_g, Z_g);
+	CUDA_CHECK(cudaThreadSynchronize());
 	//CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	//CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	//CUDA_CHECK(cudaMemcpy(lam, lam_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", V[0], V[nx*ny - 1]);
 
 
-	HubbertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, (float)vFm, (float)thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
+	//HubbertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, (float)vFm, (float)thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
+	//CUDA_CHECK(cudaThreadSynchronize());
+
+	McConochieWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, Vmax, vFm, thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
 
