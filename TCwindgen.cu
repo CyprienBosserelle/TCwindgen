@@ -155,6 +155,49 @@ __global__ void JelesnianskiWindProfile(int nx, int ny, float f, float vMax, flo
 
 	}
 }
+__global__ void HollandWindProfile(int nx, int ny, float f, float vMax, float rMax, float dP, float rho, float beta, float *R, float *V, float *Z)
+{
+	//
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+	float Vi, Ri, Zi;
+	float E, d2Vm,aa,bb,cc; 
+	float delta, edelta;
+	if (ix < nx && iy < ny)
+	{
+		//
+
+		E = expf(1.0f);
+		d2Vm = ((beta * dP * (-4.0f * beta *beta *beta * dP / rho - (-2.0f + beta *beta) * E * (f * rMax) *(f * rMax))) / (E * rho * sqrt((4.0f * beta * dP) / (E * rho) + (f * rMax) *(f * rMax)) * (4.0f * beta * dP * rMax *rMax / rho + E * (f * rMax *rMax) *(f * rMax *rMax))));
+
+		aa = ((d2Vm / 2.0f - (-vMax / rMax) / rMax) / rMax);
+
+		bb = (d2Vm - 6.0f * aa * rMax) / 2.0f;
+
+		cc = -3.0f * aa * rMax *rMax - 2.0f * bb * rMax;
+
+		delta = powf(rMax / Ri, beta);
+		edelta = expf(-delta);
+		if (Ri <= rMax)
+		{
+			Vi = (Ri * (Ri * (Ri * aa + bb) + cc));
+		}
+		else
+		{
+			Vi =  (sqrtf((dP * beta / rho)* delta * edelta + (Ri * f / 2.0f)*(Ri * f / 2.0f)) - Ri *abs(f) / 2.0f);
+			Zi = ((sqrt((dP * beta / rho) * delta * edelta + (Ri * f / 2..0f) ** 2)) / R -
+				np.abs(self.f) + edelta *
+				(2 * (beta ** 2) * self.dP * (delta - 1) * delta +
+				self.rho * edelta * (self.f * R) ** 2) /
+				(2 * self.rho * R *
+				np.sqrt(4 * (beta * self.dP / self.rho) * delta * edelta
+				+ (self.f * R) ** 2)))
+		}
+		V[i] = Vi*f / abs(f);
+	}
+
+}
 
 __global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float thetaFm, float *R, float *lam, float *V, float *Uw, float *Vw)
 {
