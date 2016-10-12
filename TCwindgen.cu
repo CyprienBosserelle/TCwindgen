@@ -17,6 +17,17 @@
 #define pi 3.14159265f
 
 
+// Global parameters;
+float * Gridlon, *Gridlon_g; // Longitude vector is length of nx
+float * Gridlat, *Gridlat_g; // Latitude vector isd length of ny
+float * R, *R_g; // array of distance  is size of nx*ny;
+float *lam, *lam_g; // array of bearing (forward azimuth) from TC center to each grid point
+float * V, *V_g; // array for Wind velocity
+float * Z, *Z_g; // array for TC vorticity
+float *Uw, *Vw, *Uw_g, *Vw_g; // Array of U and V wind from the cyclone
+int nx, ny; //grid dimension
+
+
 extern "C" void creatncfile(char outfile[], int nx, int ny, float totaltime, float * xval, float * yval, float *R, float *V, float *Z)
 {
 	int status;
@@ -167,6 +178,7 @@ __global__ void HollandWindProfile(int nx, int ny, float f, float vMax, float rM
 	if (ix < nx && iy < ny)
 	{
 		//
+		Ri = R[i];
 
 		E = expf(1.0f);
 		d2Vm = ((beta * dP * (-4.0f * beta *beta *beta * dP / rho - (-2.0f + beta *beta) * E * (f * rMax) *(f * rMax))) / (E * rho * sqrt((4.0f * beta * dP) / (E * rho) + (f * rMax) *(f * rMax)) * (4.0f * beta * dP * rMax *rMax / rho + E * (f * rMax *rMax) *(f * rMax *rMax))));
@@ -195,9 +207,170 @@ __global__ void HollandWindProfile(int nx, int ny, float f, float vMax, float rM
 
 }
 
+__global__ void NewHollandWindProfile(int nx, int ny, float f, float rMax, float dP, float rho, float TClat, float *R, float *V, float *Z)
+{
+	//Holland et al. 2010.  In this version, the exponent is allowed to
+	//vary linearly outside the radius of maximum wind.i.e.rather than
+	//	take the sqare root, the exponent varies around 0.5.Currently
+	//	this version does not have a corresponding vorticity profile set up
+	//	in windVorticity, so it cannot be applied in some wind field modelling.
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+	float Vi, Ri, Zi;
+	float E, d2Vm, aa, bb, cc;
+	float delta, edelta;
+
+	float Bs, deltag, edeltag, rgterm, xn, xx;
+
+	
+	float rGale = 150.0; // Radius for gale force wind. This should be user defined
+
+	if (ix < nx && iy < ny)
+	{
+		//
+		Ri = R[i];
+		Bs = (-0.000044f * powf(dP / 100.0f, 2.0f) + 0.01 * (dP / 100.0f) - 0.014f * abs(TClat) + 1.0);
+		deltag = powf(rMax / rGale, Bs);
+		edeltag = exp(-1.0f * deltag);
+		rgterm = Bs * dP * deltag * edeltag / rho;
+		xn = log(17.0f) / log(rgterm);
+		xx = 0.5;
+
+		if (Ri > rMax)
+		{
+			xx = (0.5 + (Ri - rMax) * (xn - 0.5) / (rGale - rMax));
+		}
+
+		delta = powf(rMax / Ri, Bs);
+		edelta = exp(-delta);
+
+		V[i] = (f / abs(f)) * pow((dP * Bs / rho) *delta * edelta, xx);
+		Z[i] = 0.0f;// Warning dummy value
+		
+	}
+}
+
+__global__ void DoubleHollandWindProfile(int nx, int ny, float f, float vMax, float rMax, float dP, float cP, float rho, float beta, float *R, float *V, float *Z)
+{
+	//McConochie *et al*'s double Holland vortex model (based on Cardone *et
+	//al*, 1994).This application is the Coral Sea adaptation of the
+	//double vortex model(it can also be used for concentric eye - wall
+	//configurations).
+	//
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+	float Vi, Ri, Zi;
+	float E, d2Vm, aa, bb, cc;
+	float delta, edelta;
+
+	float beta1, beta2;
+
+	float rMax2 = 150.0f;
+	float rMax1 = rMax;
+	float gradientV1, gradientV2;
+
+	float chi, psi;
+
+	float dp2,dp1,nu,mu,enu,emu;
+
+	if (dP < 1500.0f)
+	{
+		dp2 = ((dP / 1500.0f) * (800.0f + (dP - 800.0f) / 2000.0f));
+	}
+	else
+	{
+		dp2 = 800.0f + (dP - 800.0f) / 2000.0f;
+	}
+
+	dp1 = dP - dp2;
+
+
+	//Second derivative of the profile
+	beta1 = beta;
+	beta2 = 7.2f - cP / 16000.0f;
+
+	E = exp(1.0f);
+	
+	nu = pow((rMax2 / rMax1), beta2);
+
+	d2Vm = (-1.0f / (8.0f * pow(4.0f * beta1 * dp1 / (rho * E) + (4.0f * beta2 * dp2 / rho) * nu * exp(-nu) + powf(rMax1 * f, 2.0f), 1.5f))*
+		(-(4.0f * (beta1 *beta1) * dp1 / (rho * rMax1 * E)) + (4.0f * (beta1 * beta1) * dp1 / (rho * rMax1 * E)) - (4 * (beta2 *beta2) * dp2 / rho) *
+		(nu / rMax1) * exp(-nu) + (4.0f * (beta2 *beta2) * dp2 / rho) *((nu *nu) / rMax1) * exp(-nu) + 2.0f * rMax1 * f *f, 2.0f)
+		+ 1.0f / (4.0f * sqrt((4 * beta1 * dp1 / (rho * E)) +
+		(4.0f * beta2 * dp2 / rho) * nu * 2.0f +
+		exp(-nu) + pow(rMax1 * f,2.0f)))
+		* ((4.0f * (beta1 *beta1*beta1) * dp1 / (rho * (rMax1 *rMax1) * E))
+		+ (4.0f * (beta1 *beta1) * dp1 / (rho * (rMax1 *rMax1) * E))
+		- (12.0f * (beta1 *beta1*beta1) * dp1 / (rho * (rMax1 *rMax1) * E))
+		- (4.0f * (beta1 *beta1) * dp1 / (rho * (rMax1 *rMax1) * E))
+		+ (4.0f * (beta1 *beta1*beta1) * dp1 / (rho * (rMax1 *rMax1) * E))
+		+ (4.0f * (beta2 *beta2*beta2) * dp2 / rho) *
+		(nu / (rMax1 *rMax1)) * exp(-nu)
+		+ (4.0f * (beta2 *beta2) * dp2 / rho) *
+		(nu / (rMax1 *rMax1)) * exp(-nu)
+		- (12.0f * (beta2 *beta2*beta2) * dp2 / rho) *
+		(nu *nu) / (rMax1 *rMax1) * exp(-nu)
+		- (4.0f * (beta2 *beta2) * dp2 / rho) *
+		(nu *nu) / (rMax1 *rMax1) * exp(-nu)
+		+ (4.0f * (beta2 *beta2*beta2) * dp2 / rho) *
+		(nu *nu*nu) / (rMax1 *rMax1) * exp(-nu)
+		+ 2.0f * f *f));
+
+
+	if (ix < nx && iy < ny)
+	{
+		//
+		Ri = R[i];
+		mu = powf(rMax / Ri, beta1);
+		nu = powf(rMax2 / Ri, beta2);
+		emu = exp(-mu);
+		enu = exp(-nu);
+
+		chi = beta1 * dp1 / rho;
+		psi = beta2 * dp2 / rho;
+
+		gradientV1 = (chi) * mu * emu;
+		gradientV2 = (psi) * nu * enu;
+
+
+		aa = (d2Vm / 2.0f - (-vMax / rMax) / rMax) / rMax;
+		bb = (d2Vm - 6.0f * aa * rMax) / 2.0f;
+		cc = -3.0f * aa * rMax * rMax - 2.0f * bb * rMax;
+
+		Vi = (f / abs(f) * sqrt(gradientV1 + gradientV2 + (Ri *f / 2.0f) *(Ri *f / 2.0f)) - Ri * abs(f) / 2.0f);
+
+		if (dP >= 1500.0f && Ri <= rMax)
+		{
+			Vi = (f / abs(f) * Ri * (Ri * (Ri * aa + bb) + cc));
+		}
+
+		V[i] = Vi;
+		Z[i] = 0.0f;
+			//(f / abs(f) * sqrtf(chi * delta * edelta + psi * nu * enu + (f * Ri / 2.0f) *(f * Ri / 2.0f)) / Ri -
+			//abs(f) + (0.5f) *
+			//(chi * ddelta * edelta * (1 - delta) +
+			//psi * dgamma * egamma * (1 - gamma) +
+			//R * self.f ** 2) /
+			//np.sqrt(chi * delta * edelta + psi * gamma *
+			//egamma + (self.f * R / 2) ** 2))
+
+
+	}
+}
+
+
+
+
+
 __global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float thetaFm, float *R, float *lam, float *V, float *Uw, float *Vw)
 {
 	//
+	//Hubbert, G.D., G.J.Holland, L.M.Leslie and M.J.Manton, 1991:
+	//A Real - Time System for Forecasting Tropical Cyclone Storm Surges.
+	//	*Weather and Forecasting*, **6 * *, 86 - 97
+
 	/*lam: Direction(geographic bearing, positive clockwise)
 	from storm centre to the grid.
 	: type  lam : : class :`numpy.ndarray`
@@ -247,6 +420,9 @@ __global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float th
 __global__ void McConochieWindField(int nx, int ny, float rMax, float vMax, float vFm, float thetaFm, float *R, float *lam, float *V, float *Uw, float *Vw)
 {
 	//
+	//McConochie, J.D., T.A.Hardy and L.B.Mason, 2004:
+	//Modelling tropical cyclone over - water wind and pressure fields.
+	//	Ocean Engineering, 31, 1757 - 1782.
 	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
 	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
 	unsigned int i = ix + iy*nx;
@@ -299,6 +475,100 @@ __global__ void McConochieWindField(int nx, int ny, float rMax, float vMax, floa
 		}
 		Uw[i] = swrf * Vsf * sinf(phi);
 		Vw[i] = swrf * Vsf * cosf(phi);
+	}
+}
+
+__global__ void KepertWindField(int nx, int ny, float rMax, float vMax, float vFm, float thetaFm, float f, float *R, float *lam, float *V, float *Z, float *Uw, float *Vw)
+{
+	// Kepert, J., 2001: The Dynamics of Boundary Layer Jets within the
+	//Tropical Cyclone Core.Part I : Linear Theory.J.Atmos.Sci., 58,
+	//	2469 - 2484
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+
+	float Ri, Vi, Zi;
+	float lami;
+	float K = 50.0f; //diffusivity
+	float Cd = 0.002f; // Constant drag coeff
+
+	float Vt,al,be,gam, albe;
+	float chi, eta, psi;
+
+	float A0r, A0i,u0s,v0s,Amr,Ami,ums,vms,Apr,Api,ups,vps;
+	float us, vs, usf, vsf,phi;
+
+	if (ix < nx && iy < ny)
+	{
+		//
+		//V = self.velocity(R)
+		Ri = R[i];
+		lami = lam[i] * pi / 180.0f;
+		Vi = V[i];
+		Zi = Z[i];
+
+		Vt = vFm;
+		if (Ri>4.0f*rMax)
+		{
+			Vt = vFm * expf(-pow((Ri / rMax) - 4.0f, 2.0f));
+		}
+
+		al = ((2.0f * Vi / Ri) + f) / (2.0f * K);
+		be = (f + Zi) / (2.0f * K);
+		gam = (-1.0f * f/abs(f)) * Vi / (2.0f * K * Ri);
+
+		albe = sqrtf(al / be);
+
+		chi = (Cd / K) * Vi / sqrt(sqrt(al * be));
+		eta = (Cd / K) * Vi / sqrt(sqrt(al * be) + abs(gam));
+		psi = (Cd / K) * Vi / sqrt(abs(sqrt(al * be) - gam));
+
+		// converted from complex number formula to this
+		A0r = (-chi * Vi) / (2.0f * chi *chi + 3.0f* chi + 2.0f);
+		A0i = (-chi * Vi * (1. + chi) / (2.0f * chi *chi + 3.0f* chi + 2.0f));
+
+		//Symmetric surface wind component
+		u0s = albe*A0r;
+		v0s = A0i;
+
+		// converted from complex number formula to this
+		Amr = (-(psi * (1.0f + 2.0f * albe + (1.0f + albe) * eta)) * Vt / (albe * (2.0f * (1 + eta * psi) + 3.0f * psi + 3.0f * i * eta)));
+		Ami = (-(psi * ( (1.0f + albe) * eta)) * Vt / (albe * (2.0f * (1.0f + eta * psi))));
+
+		if (abs(gam) > sqrt(al*be))
+		{
+			Amr = (-(psi * (1.0f + 2.0f * albe +  (1.0f + albe) * eta) * Vt) / (albe * (2.0f + 3.0f * (eta + psi) + 2.0f * eta * psi)));
+			Ami = (-(psi * ( (1.0f + albe) * eta) * Vt) / (albe * (- 2.0f + 2.0f  * eta * psi)));
+		}
+
+		//First asymmetric surface component
+		ums = albe * Amr;
+		vms = (Ami * exp(-(lami)));
+		
+		Apr = (-(eta * (1.0f - 2.0f * albe + (1.0f - albe) * psi)) * Vt / (albe * (2.0f * (1.0f + eta * psi) + 3.0f * eta )));
+		Api = (-(eta * ((1.0f - albe) * psi)) * Vt / (albe * (2.0f * (1.0f + eta * psi) + 3.0f * psi)));
+		
+		if (abs(gam) > sqrt(al*be))
+		{
+			Apr = (-(eta * (1.0f - 2.0f * albe + (1.0f - albe) * psi) * Vt) / (albe * (2.0f + 3.0f * (eta + psi) + 2.0f * eta * psi)));
+			Api = (-(eta * ((- 1.0f) * (1.0f - albe) * psi) * Vt) / (albe * ( 2.0f - 2.0f * eta * psi)));
+		}
+
+		//Second asymmetric surface component
+		ups = albe * Apr;
+		vps = Api * exp(lami);
+
+		//Total surface wind in (moving coordinate system)
+		us = u0s + ups + ums;
+		vs = Vi + v0s + vps + vms;
+
+		usf = us + Vt * cosf(lami - thetaFm);
+		vsf = vs - Vt * sinf(lami - thetaFm);
+		phi = atan2(usf, vsf);
+
+		Uw[i] = (sqrtf(usf*usf + vsf *vsf) * sinf(phi - lami));
+		Vw[i] = (sqrtf(usf*usf + vsf *vsf) * cosf(phi - lami));
+
 	}
 }
 
@@ -363,6 +633,96 @@ double Vmax_models(int model, double cP, double eP, double beta, double rho)
 	}
 }
 
+int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, double cP, double eP, double rMax, double vFm, double thetaFm, double beta, double rho)
+{
+	//Cyclone parameters
+	//double TClat = -18.0;//Latitude of TC centre
+	//double TClon = 178.0;//Longitude of TC centre
+
+	//double cP = 900.0; //central pressure hpa
+	//double eP = 1013.0; //Env pressure hpa
+	//double rMax = 40.0; // Radius of maximum wind (km)
+	//double vFm = 15.0; //Foward speed of the storm(m / s)
+	//double thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
+
+	//Calculated parameters
+	double dP; //Pressure difference
+	double Vmax; // Max speed
+	//double beta = 1.30;
+	//double rho = 1.15;
+	float Rearth = 6372797.560856f;
+	float E, d2Vm, f;
+	// convert from hPa to Pa
+	cP = cP * 100.0;
+	eP = eP * 100.0;
+
+
+	dP = eP - cP;
+
+	Vmax = Vmax_models(1, cP, eP, beta, rho);
+
+	double TClatrad = TClat*pi / 180.0;
+	double wearth = pi*(1.0 / 24.0) / 1800.0;
+	f = 2.0f*wearth*sin(TClatrad);
+
+	// Calculate R from the present cyclone position
+	//calc distance between each i  and i and the TC using haversine formula
+	/*for (int i = 0; i < nx; i++)
+	{
+	for (int j = 0; j < ny; j++)
+	{
+	float dlat = (Gridlat[j] - TClat)*pi / 180.0f;
+	float lat1 = TClat * pi / 180.0f;
+	float lat2 = Gridlat[j] * pi / 180.0f;
+	float dlon = (Gridlon[i] - TClon)*pi / 180.0f;
+	float a = sinf(dlat / 2.0f)*sinf(dlat / 2.0f) + cosf(lat1)*cosf(lat2)*sinf(dlon / 2.0f)*sinf(dlon / 2.0f);
+	float c = 2.0f * atan2f(sqrtf(a), sqrtf(1 - a));
+	R[i + j*nx] = c*Rearth;
+	}
+	}*/
+
+	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", R[0], R[nx*ny - 1]);
+
+
+	dim3 blockDim(16, 16, 1);// This means that the grid has to be a factor of 16 on both x and y
+	dim3 gridDim(ceil((nx*1.0f) / blockDim.x), ceil((ny*1.0f) / blockDim.y), 1);
+
+
+	Rdist << <gridDim, blockDim, 0 >> >(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g, lam_g);
+	CUDA_CHECK(cudaThreadSynchronize());
+
+	//JelesnianskiWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, R_g, V_g, Z_g);
+	//CUDA_CHECK(cudaThreadSynchronize());
+
+	//HollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, dP, rho, beta, R_g, V_g, Z_g);
+	//CUDA_CHECK(cudaThreadSynchronize());
+
+	//NewHollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, rMax, dP, rho, TClat, R_g, V_g, Z_g);
+	//CUDA_CHECK(cudaThreadSynchronize());
+
+	DoubleHollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, dP, cP, rho, beta, R_g, V_g, Z_g);
+	CUDA_CHECK(cudaThreadSynchronize());
+	//CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	//CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	//CUDA_CHECK(cudaMemcpy(lam, lam_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", V[0], V[nx*ny - 1]);
+
+
+	//HubbertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, (float)vFm, (float)thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
+	//CUDA_CHECK(cudaThreadSynchronize());
+
+	McConochieWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, Vmax, vFm, thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
+	CUDA_CHECK(cudaThreadSynchronize());
+
+	//KepertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, Vmax, vFm, thetaFm, f, R_g, lam_g, V_g, Z_g, Uw_g, Vw_g);
+	//CUDA_CHECK(cudaThreadSynchronize());
+
+	return 0;
+
+}
+
+
+
 int main(int argc, char **argv)
 {
 	// Grid parameters
@@ -376,15 +736,7 @@ int main(int argc, char **argv)
 	double LatMax = -17.0;
 	
 	
-	// Generate grid parameters;
-	float * Gridlon, * Gridlon_g; // Longitude vector is length of nx
-	float * Gridlat, * Gridlat_g; // Latitude vector isd length of ny
-	float * R, * R_g; // array of distance  is size of nx*ny;
-	float *lam, *lam_g; // array of bearing (forward azimuth) from TC center to each grid point
-	float * V, *V_g; // array for Wind velocity
-	float * Z, *Z_g; // array for TC vorticity
-	float *Uw, *Vw, *Uw_g, *Vw_g; // Array of U and V wind from the cyclone
-	int nx, ny; //grid dimension
+	
 
 
 	nx = ceil((LonMax - LonMin) / dlon); // in case not an exact match then LonMax is extended
@@ -433,105 +785,40 @@ int main(int argc, char **argv)
 	CUDA_CHECK(cudaMalloc((void **)&Vw_g, nx*ny*sizeof(float)));
 
 
-	printf("Gridlon[0]=%f\tGridlon[nx-1]=%f\n", Gridlon[0], Gridlon[1]);
+	//printf("Gridlon[0]=%f\tGridlon[nx-1]=%f\n", Gridlon[0], Gridlon[1]);
 	//printf("Gridlat[0]=%f\tGridlat[ny-1]=%f\n", Gridlat[0], Gridlat[1]);
 
-	//Cyclone parameters
-	double TClat=-18.0;//Latitude of TC centre
-	double TClon=178.0;//Longitude of TC centre
+	// First iteration
+	int iteration = 0;
+
+	double dt = 600;// needs to be small enough to make a smooth model
+
+	int Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype; //not yet set. Default is Double Holland for the wind profile, McConochie for the wind field, and Holland for vmax
+
+	double TClat = -18.0;//Latitude of TC centre
+	double TClon = 178.0;//Longitude of TC centre
 
 	double cP = 900.0; //central pressure hpa
 	double eP = 1013.0; //Env pressure hpa
 	double rMax = 40.0; // Radius of maximum wind (km)
 	double vFm = 15.0; //Foward speed of the storm(m / s)
 	double thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
-
-	//Calculated parameters
-	double dP; //Pressure difference
-	double Vmax; // Max speed
-	double beta=1.30;
-	double rho=1.15;
-	float Rearth = 6372797.560856f;
-	float E, d2Vm,f;
-	// convert from hPa to Pa
-	cP = cP * 100.0;
-	eP = eP * 100.0;
-
-	
-	dP = eP - cP;
-		
-	Vmax = Vmax_models(0, cP, eP, beta, rho);
-
-	double TClatrad = TClat*pi / 180.0;
-	double wearth = pi*(1.0 / 24.0) / 1800.0;
-	f = 2.0f*wearth*sin(TClatrad);
-
-	// Calculate R from the present cyclone position
-	//calc distance between each i  and i and the TC using haversine formula
-	/*for (int i = 0; i < nx; i++)
-	{
-		for (int j = 0; j < ny; j++)
-		{
-			float dlat = (Gridlat[j] - TClat)*pi / 180.0f;
-			float lat1 = TClat * pi / 180.0f;
-			float lat2 = Gridlat[j] * pi / 180.0f;
-			float dlon = (Gridlon[i] - TClon)*pi / 180.0f;
-			float a = sinf(dlat / 2.0f)*sinf(dlat / 2.0f) + cosf(lat1)*cosf(lat2)*sinf(dlon / 2.0f)*sinf(dlon / 2.0f);
-			float c = 2.0f * atan2f(sqrtf(a), sqrtf(1 - a));
-			R[i + j*nx] = c*Rearth;
-		}
-	}*/
-
-	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", R[0], R[nx*ny - 1]);
+	double beta = 1.30;
+	double rho = 1.15;
 
 
-	dim3 blockDim(16, 16, 1);// This means that the grid has to be a factor of 16 on both x and y
-	dim3 gridDim(ceil((nx*1.0f) / blockDim.x), ceil((ny*1.0f) / blockDim.y), 1);
-
-
-	Rdist <<<gridDim, blockDim, 0 >>>(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g, lam_g);
-	CUDA_CHECK(cudaThreadSynchronize());
-
-	//JelesnianskiWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, R_g, V_g, Z_g);
-	//CUDA_CHECK(cudaThreadSynchronize());
-
-	HollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, dP, rho, beta, R_g, V_g, Z_g);
-	CUDA_CHECK(cudaThreadSynchronize());
-	//CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
-	//CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
-	//CUDA_CHECK(cudaMemcpy(lam, lam_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
-	//printf("R[0]=%f\tR[nx*ny-1]=%f\n", V[0], V[nx*ny - 1]);
-
-
-	//HubbertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, (float)vFm, (float)thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
-	//CUDA_CHECK(cudaThreadSynchronize());
-
-	McConochieWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, Vmax, vFm, thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
-	CUDA_CHECK(cudaThreadSynchronize());
-
+	// Below function modifies and call global parameters 
+	int dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TClat, TClon,cP, eP, rMax, vFm, thetaFm, beta, rho);
 
 	CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Uw, Uw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 
 	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, V, Uw, Vw);
-	//Calculate velocity and Vorticity
-	/*
-	E = exp(1);
-	d2Vm = ((beta * dP * (-4 * pow(beta, 3) * dP / rho -
-		(-2 + beta * beta) * E * pow(f * rMax, 2))) /
-		(E * rho * sqrt((4 * beta * dP) / (E * rho)
-		+ pow(f * rMax, 2)) * (4 * beta * dP * rMax *rMax / rho
-		+ E * pow(f * rMax * rMax, 2))));
 
-	double aa, bb, cc;
-	aa = ((d2Vm / 2.0 - (-1.0*Vmax / rMax) / rMax) / rMax);
-	bb = (d2Vm - 6 * aa * rMax) / 2.0;
-	cc = -3 * aa * rMax * rMax - 2 * bb * rMax;
-	*/
+	 
+	
 
-	//delta = pow(rMax / R, beta);
-	//edelta = exp(-1.0*delta)
 
 
 }
