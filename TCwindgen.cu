@@ -845,20 +845,15 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 
 }
 
-
-param readparamstr(std::string line,param grid)
+std::string findparameter(std::string parameterstr, std::string line)
 {
-	std::size_t found,Numberstart,Numberend;
-	
-	std::string parameterstr, parameternumber;
-
-	parameterstr = "LonMin =";
-
+	std::size_t found, Numberstart, Numberend;
+	std::string parameternumber;
 	found = line.find(parameterstr);
 	if (found != std::string::npos) // found a line that has Lonmin
 	{
 		//std::cout <<"found LonMin at : "<< found << std::endl;
-		Numberstart = found + 8;
+		Numberstart = found + parameterstr.length();
 		found = line.find(";");
 		if (found != std::string::npos) // found a line that has Lonmin
 		{
@@ -869,9 +864,62 @@ param readparamstr(std::string line,param grid)
 			Numberend = line.length();
 		}
 		parameternumber = line.substr(Numberstart, Numberend);
+		
+	}
+	return parameternumber;
+}
+
+param readparamstr(std::string line,param grid)
+{
+	
+	
+	std::string parameterstr, parameternumber;
+
+	parameterstr = "LonMin =";
+	//grid.LonMin = std::stod(parameternumber);
+	parameternumber = findparameter(parameterstr, line);
+
+	if (!parameternumber.empty())
+	{
 		grid.LonMin = std::stod(parameternumber);
 	}
-	//grid.LonMin = 0.0;
+
+	parameterstr = "LonMax =";
+	//grid.LonMin = std::stod(parameternumber);
+	parameternumber = findparameter(parameterstr, line);
+
+	if (!parameternumber.empty())
+	{
+		grid.LonMax = std::stod(parameternumber);
+	}
+
+	parameterstr = "LatMin =";
+	//grid.LonMin = std::stod(parameternumber);
+	parameternumber = findparameter(parameterstr, line);
+
+	if (!parameternumber.empty())
+	{
+		grid.LatMin = std::stod(parameternumber);
+	}
+
+	parameterstr = "LatMax =";
+	//grid.LonMin = std::stod(parameternumber);
+	parameternumber = findparameter(parameterstr, line);
+
+	if (!parameternumber.empty())
+	{
+		grid.LatMax = std::stod(parameternumber);
+	}
+
+	parameterstr = "dlon =";
+	//grid.LonMin = std::stod(parameternumber);
+	parameternumber = findparameter(parameterstr, line);
+
+	if (!parameternumber.empty())
+	{
+		grid.dlon = std::stod(parameternumber);
+	}
+
 	return grid;
 }
 

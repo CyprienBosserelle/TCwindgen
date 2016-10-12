@@ -1,0 +1,10 @@
+# Comment
+LonMin = 175.0; some other comments
+LonMax = 180.0;
+dlon = 0.005;
+
+
+LatMin = -19.0;
+LatMax = -17.0
+
+trackfile=test.dat;
