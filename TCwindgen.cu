@@ -24,7 +24,7 @@ float * R, *R_g; // array of distance  is size of nx*ny;
 float *lam, *lam_g; // array of bearing (forward azimuth) from TC center to each grid point
 float * V, *V_g; // array for Wind velocity
 float * Z, *Z_g; // array for TC vorticity
-float *Uw, *Vw, *Uw_g, *Vw_g; // Array of U and V wind from the cyclone
+float *Uw, *Vw, *Uw_g, *Vw_g, *P, *P_g; // Array of U and V wind and P pressure from the cyclone
 int nx, ny; //grid dimension
 
 
@@ -84,9 +84,9 @@ extern "C" void creatncfile(char outfile[], int nx, int ny, float totaltime, flo
 
 
 
-	status = nc_def_var(ncid, "R", NC_FLOAT, 3, var_dimids, &R_id);
-	status = nc_def_var(ncid, "V", NC_FLOAT, 3, var_dimids, &V_id);
-	status = nc_def_var(ncid, "Z", NC_FLOAT, 3, var_dimids, &Z_id);
+	status = nc_def_var(ncid, "P", NC_FLOAT, 3, var_dimids, &R_id);
+	status = nc_def_var(ncid, "U", NC_FLOAT, 3, var_dimids, &V_id);
+	status = nc_def_var(ncid, "V", NC_FLOAT, 3, var_dimids, &Z_id);
 
 	//put attriute: assign attibute values
 	//nc_put_att
@@ -203,6 +203,24 @@ __global__ void HollandWindProfile(int nx, int ny, float f, float vMax, float rM
 		}
 		V[i] = Vi*f / abs(f);
 		Z[i] = Zi*f / abs(f);
+	}
+
+}
+__global__ void HollandPressureProfile(int nx, int ny, float rMax, float dP, float cP, float beta, float *R, float *P)
+{
+	//Holland pressure profile
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+
+	float Ri;
+
+	if (ix < nx && iy < ny)
+	{
+		//
+		Ri = R[i];
+
+		P[i] = cP + dP*exp(-1.0f*pow(rMax / Ri, beta));
 	}
 
 }
@@ -361,8 +379,47 @@ __global__ void DoubleHollandWindProfile(int nx, int ny, float f, float vMax, fl
 }
 
 
+__global__ void DoubleHollandPressureProfile(int nx, int ny,  float rMax, float dP, float cP,  float beta, float *R, float *P)
+{
+	//Holland pressure profile
+	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
+	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
+	unsigned int i = ix + iy*nx;
+
+	float Ri;
+	float dp1,dp2;
+	float beta1, beta2;
+	float nu, mu, enu, emu;
+
+	float rMax2 = 150.0f;
 
 
+	if (dP < 1500.0f)
+	{
+		dp2 = (dP / 1500.0f)*(800.0f + (dP - 800.0f) / 2000.0f);
+	}
+	else
+	{
+		dp2 = 800.0f + (dP - 800.0f) / 2000.0f;
+	}
+
+	dp1 = dP - dp2;
+
+	beta1 = beta;
+	//beta1 = 7.3f - cP / 16000.0f;
+	beta2 = 7.2 - cP / 16000.0f;
+
+	if (ix < nx && iy < ny)
+	{
+		//
+		Ri = R[i];
+		mu = powf(rMax / Ri,beta1);
+		nu = powf(rMax2 / Ri,beta2);
+		emu = exp(-mu);
+		enu = exp(-nu);
+		P[i] = cP + dp1*emu + dp2*enu;
+	}
+}
 
 __global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float thetaFm, float *R, float *lam, float *V, float *Uw, float *Vw)
 {
@@ -702,6 +759,9 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 
 	DoubleHollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, dP, cP, rho, beta, R_g, V_g, Z_g);
 	CUDA_CHECK(cudaThreadSynchronize());
+
+	DoubleHollandPressureProfile << <gridDim, blockDim, 0 >> >(nx, ny, rMax, dP, cP, beta, R_g, P_g);
+	CUDA_CHECK(cudaThreadSynchronize());
 	//CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	//CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	//CUDA_CHECK(cudaMemcpy(lam, lam_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
@@ -779,10 +839,14 @@ int main(int argc, char **argv)
 	CUDA_CHECK(cudaMalloc((void **)&V_g, nx*ny*sizeof(float)));
 	Z = (float *)malloc(nx*ny*sizeof(float));
 	CUDA_CHECK(cudaMalloc((void **)&Z_g, nx*ny*sizeof(float)));
+
 	Uw = (float *)malloc(nx*ny*sizeof(float));
 	CUDA_CHECK(cudaMalloc((void **)&Uw_g, nx*ny*sizeof(float)));
 	Vw = (float *)malloc(nx*ny*sizeof(float));
 	CUDA_CHECK(cudaMalloc((void **)&Vw_g, nx*ny*sizeof(float)));
+	P = (float *)malloc(nx*ny*sizeof(float));
+	CUDA_CHECK(cudaMalloc((void **)&P_g, nx*ny*sizeof(float)));
+
 
 
 	//printf("Gridlon[0]=%f\tGridlon[nx-1]=%f\n", Gridlon[0], Gridlon[1]);
@@ -793,7 +857,9 @@ int main(int argc, char **argv)
 
 	double dt = 600;// needs to be small enough to make a smooth model
 
-	int Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype; //not yet set. Default is Double Holland for the wind profile, McConochie for the wind field, and Holland for vmax
+	int Profilemodeltype = 1;//not yet implemented. Default is Double Holland 
+	int WindFieldmodeltype = 1;//not yet  implemented. Default is McConochie for the wind field
+	int Vmaxmodeltype = 1;; //not yet  implemented. Default is Holland 
 
 	double TClat = -18.0;//Latitude of TC centre
 	double TClon = 178.0;//Longitude of TC centre
@@ -810,11 +876,11 @@ int main(int argc, char **argv)
 	// Below function modifies and call global parameters 
 	int dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TClat, TClon,cP, eP, rMax, vFm, thetaFm, beta, rho);
 
-	CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+	CUDA_CHECK(cudaMemcpy(P, P_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Uw, Uw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 
-	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, V, Uw, Vw);
+	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, P, Uw, Vw);
 
 	 
 	
