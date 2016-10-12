@@ -109,6 +109,62 @@ extern "C" void creatncfile(char outfile[], int nx, int ny, float totaltime, flo
 	status = nc_close(ncid);
 }
 
+
+extern "C" void writestep2nc(char outfile[], int nx, int ny, float totaltime, float *R, float *V, float *Z)
+{
+	int status;
+	int ncid, time_dim, recid;
+	size_t nxx, nyy;
+	int time_id, R_id, V_id, Z_id;
+	static size_t start[] = { 0, 0, 0 }; // start at first value 
+	static size_t count[] = { 1, ny, nx };
+	//static size_t pstart[] = {0, 0}; // start at first value 
+	//	static size_t pcount[] = {1, npart};
+	static size_t tst[] = { 0 };
+
+	nxx = nx;
+	nyy = ny;
+
+
+	static size_t nrec;
+	status = nc_open(outfile, NC_WRITE, &ncid);
+
+	//read id from time dimension
+	status = nc_inq_unlimdim(ncid, &recid);
+	status = nc_inq_dimlen(ncid, recid, &nrec);
+	printf("nrec=%d\n", nrec);
+
+	//read file for variable ids
+	status = nc_inq_varid(ncid, "time", &time_id);
+	
+	status = nc_inq_varid(ncid, "P", &R_id);
+	status = nc_inq_varid(ncid, "U", &V_id);
+	status = nc_inq_varid(ncid, "V", &Z_id);
+	
+	//status = nc_inq_varid(ncid, "xxp", &xxp_id);
+	//status = nc_inq_varid(ncid, "yyp", &yyp_id);
+
+
+	start[0] = nrec;
+	//pstart[0] = nrec;    
+	tst[0] = nrec;
+
+	//Provide values for variables
+	status = nc_put_var1_float(ncid, time_id, tst, &totaltime);
+	
+	status = nc_put_vara_float(ncid, R_id, start, count, R);
+	status = nc_put_vara_float(ncid, V_id, start, count, V);
+	status = nc_put_vara_float(ncid, Z_id, start, count, Z);
+	
+
+
+
+	//close and save
+	status = nc_close(ncid);
+
+
+}
+
 __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TClon, double TClat, float *R, float *lam)
 {
 	//
@@ -789,7 +845,7 @@ int main(int argc, char **argv)
 	double LonMin = 177.0;
 	double LonMax = 180.0;
 
-	double dlon = 0.001;
+	double dlon = 0.005;
 	double dlat = dlon;
 	
 	double LatMin = -19.0;
@@ -872,9 +928,10 @@ int main(int argc, char **argv)
 	double beta = 1.30;
 	double rho = 1.15;
 
+	int dummy;
 
 	// Below function modifies and call global parameters 
-	int dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TClat, TClon,cP, eP, rMax, vFm, thetaFm, beta, rho);
+	dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TClat, TClon,cP, eP, rMax, vFm, thetaFm, beta, rho);
 
 	CUDA_CHECK(cudaMemcpy(P, P_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
@@ -882,7 +939,19 @@ int main(int argc, char **argv)
 
 	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, P, Uw, Vw);
 
-	 
+	for (int i = 0; i < 20; i++)
+	{
+		//dummy main loop
+		TClat = TClat + 0.01;
+		dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TClat, TClon, cP, eP, rMax, vFm, thetaFm, beta, rho);
+
+		CUDA_CHECK(cudaMemcpy(P, P_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+		CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+		CUDA_CHECK(cudaMemcpy(Uw, Uw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
+
+		writestep2nc("test.nc", nx, ny, (i+1)*600.0f, P, Uw, Vw);
+	}
+	
 	
 
 
