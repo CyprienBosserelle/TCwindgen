@@ -5,10 +5,12 @@
 #include <stdio.h>
 #include <math.h>
 
+#include <iostream>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <string.h>
+#include <string>
 #include <cmath>
 #include <fstream>
 #include <netcdf.h>
@@ -26,6 +28,12 @@ float * V, *V_g; // array for Wind velocity
 float * Z, *Z_g; // array for TC vorticity
 float *Uw, *Vw, *Uw_g, *Vw_g, *P, *P_g; // Array of U and V wind and P pressure from the cyclone
 int nx, ny; //grid dimension
+
+class param {
+	public:
+		double LonMin , LonMax , dlon , dlat , LatMin, LatMax;
+
+};
 
 
 extern "C" void creatncfile(char outfile[], int nx, int ny, float totaltime, float * xval, float * yval, float *R, float *V, float *Z)
@@ -838,27 +846,64 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 }
 
 
+param readparamstr(std::string line,param grid)
+{
+	std::size_t found,Numberstart,Numberend;
+	
+	std::string parameterstr, parameternumber;
+
+	parameterstr = "LonMin =";
+
+	found = line.find(parameterstr);
+	if (found != std::string::npos) // found a line that has Lonmin
+	{
+		//std::cout <<"found LonMin at : "<< found << std::endl;
+		Numberstart = found + 8;
+		found = line.find(";");
+		if (found != std::string::npos) // found a line that has Lonmin
+		{
+			Numberend = found;
+		}
+		else
+		{
+			Numberend = line.length();
+		}
+		parameternumber = line.substr(Numberstart, Numberend);
+		grid.LonMin = std::stod(parameternumber);
+	}
+	//grid.LonMin = 0.0;
+	return grid;
+}
 
 int main(int argc, char **argv)
 {
+	param grid;
 	// Grid parameters
-	double LonMin = 177.0;
-	double LonMax = 180.0;
+	grid.LonMin = 177.0;
+	grid.LonMax = 180.0;
 
-	double dlon = 0.005;
-	double dlat = dlon;
+	grid.dlon = 0.005;
+	grid.dlat = grid.dlon;
 	
-	double LatMin = -19.0;
-	double LatMax = -17.0;
+	grid.LatMin = -19.0;
+	grid.LatMax = -17.0;
 	
 	
-	
+	std::ifstream fs("TC_param.txt");
+	std::string line;
+	while (std::getline(fs, line))
+	{
+		//Get param
+		grid = readparamstr(line, grid);
+		//std::cout << line << std::endl;
+	}
+	std::cout <<"Class test: " <<grid.LonMin << std::endl;
 
 
-	nx = ceil((LonMax - LonMin) / dlon); // in case not an exact match then LonMax is extended
-	ny = ceil((LatMax - LatMin) / dlat);
+	nx = ceil((grid.LonMax - grid.LonMin) / grid.dlon); // in case not an exact match then LonMax is extended
+	ny = ceil((grid.LatMax - grid.LatMin) / grid.dlat);
 
-	printf("nx=%i; ny=%i\n", nx, ny);
+	std::cout << "nx=" << nx << " ny="<< ny << std::endl;
 	// Allocate on the CPU
 	Gridlon = (float *)malloc(nx*sizeof(float));
 	Gridlat = (float *)malloc(ny*sizeof(float));
@@ -880,8 +925,8 @@ int main(int argc, char **argv)
 	dim3 blockDim1D(32, 1, 1);// This means that the grid has to be a factor of 16 on both x and y
 	dim3 gridDim1Dlon(ceil((nx*1.0f) / blockDim1D.x), 1, 1);
 	dim3 gridDim1Dlat(ceil((ny*1.0f) / blockDim1D.x), 1, 1);
-	lonGrid <<<gridDim1Dlon, blockDim1D, 0 >>>(nx,(float) dlon, (float) LonMin, Gridlon_g);
-	lonGrid <<<gridDim1Dlat, blockDim1D, 0 >>>(ny, dlat, LatMin, Gridlat_g);
+	lonGrid <<<gridDim1Dlon, blockDim1D, 0 >>>(nx,(float) grid.dlon, (float) grid.LonMin, Gridlon_g);
+	lonGrid <<<gridDim1Dlat, blockDim1D, 0 >>>(ny, grid.dlat, grid.LatMin, Gridlat_g);
 
 	CUDA_CHECK(cudaMemcpy(Gridlon, Gridlon_g, nx*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Gridlat, Gridlat_g, ny*sizeof(float), cudaMemcpyDeviceToHost));
