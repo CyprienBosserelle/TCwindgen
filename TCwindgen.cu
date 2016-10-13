@@ -600,7 +600,7 @@ double Vmax_models(int model, double cP, double eP, double beta, double rho)
 	}
 }
 
-int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, double cP, double eP, double rMax, double vFm, double thetaFm, double beta, double rho)
+int GenPUV(int Profile, int Field, int Vmaxmodel, TCparam TCpara)
 {
 	//Wrapper for TC generation of Pressure, and Wind feilds
 	
@@ -622,15 +622,15 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 	float Rearth = 6372797.560856f;
 	float E, d2Vm, f;
 	// convert from hPa to Pa
-	cP = cP * 100.0;
-	eP = eP * 100.0;
+	TCpara.cP = TCpara.cP * 100.0;
+	TCpara.eP = TCpara.eP * 100.0;
 
 
-	dP = eP - cP;
+	TCpara.dP = TCpara.eP - TCpara.cP;
 
-	Vmax = Vmax_models(1, cP, eP, beta, rho);
+	Vmax = Vmax_models(1, TCpara.cP, TCpara.eP, TCpara.beta, TCpara.rho);
 
-	double TClatrad = TClat*pi / 180.0;
+	double TClatrad = TCpara.TClat*pi / 180.0;
 	double wearth = pi*(1.0 / 24.0) / 1800.0;
 	f = 2.0f*wearth*sin(TClatrad);
 
@@ -657,7 +657,7 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 	dim3 gridDim(ceil((nx*1.0f) / blockDim.x), ceil((ny*1.0f) / blockDim.y), 1);
 
 
-	Rdist << <gridDim, blockDim, 0 >> >(nx, ny, Gridlon_g, Gridlat_g, TClon, TClat, R_g, lam_g);
+	Rdist << <gridDim, blockDim, 0 >> >(nx, ny, Gridlon_g, Gridlat_g, TCpara.TClon, TCpara.TClat, R_g, lam_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
 	//JelesnianskiWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, R_g, V_g, Z_g);
@@ -669,10 +669,10 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 	//NewHollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, rMax, dP, rho, TClat, R_g, V_g, Z_g);
 	//CUDA_CHECK(cudaThreadSynchronize());
 
-	DoubleHollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, rMax, dP, cP, rho, beta, R_g, V_g, Z_g);
+	DoubleHollandWindProfile << <gridDim, blockDim, 0 >> >(nx, ny, f, Vmax, TCpara.rMax, TCpara.dP, TCpara.cP, TCpara.rho, TCpara.beta, R_g, V_g, Z_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
-	DoubleHollandPressureProfile << <gridDim, blockDim, 0 >> >(nx, ny, rMax, dP, cP, beta, R_g, P_g);
+	DoubleHollandPressureProfile << <gridDim, blockDim, 0 >> >(nx, ny, TCpara.rMax, TCpara.dP, TCpara.cP, TCpara.beta, R_g, P_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 	//CUDA_CHECK(cudaMemcpy(R, R_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	//CUDA_CHECK(cudaMemcpy(V, V_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
@@ -683,7 +683,7 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 	//HubbertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, (float)vFm, (float)thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
 	//CUDA_CHECK(cudaThreadSynchronize());
 
-	McConochieWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, Vmax, vFm, thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
+	McConochieWindField << <gridDim, blockDim, 0 >> >(nx, ny, TCpara.rMax, Vmax, TCpara.vFm, TCpara.thetaFm, R_g, lam_g, V_g, Uw_g, Vw_g);
 	CUDA_CHECK(cudaThreadSynchronize());
 
 	//KepertWindField << <gridDim, blockDim, 0 >> >(nx, ny, rMax, Vmax, vFm, thetaFm, f, R_g, lam_g, V_g, Z_g, Uw_g, Vw_g);
@@ -803,21 +803,24 @@ int main(int argc, char **argv)
 	int WindFieldmodeltype = 1;//not yet  implemented. Default is McConochie for the wind field
 	int Vmaxmodeltype = 1;; //not yet  implemented. Default is Holland 
 
-	double TClat = -18.0;//Latitude of TC centre
-	double TClon = 178.0;//Longitude of TC centre
 
-	double cP = 900.0; //central pressure hpa
-	double eP = 1013.0; //Env pressure hpa
-	double rMax = 40.0; // Radius of maximum wind (km)
-	double vFm = 15.0; //Foward speed of the storm(m / s)
-	double thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
-	double beta = 1.30;
-	double rho = 1.15;
+	TCparam TCinit;
+
+	TCinit.TClat = -18.0;//Latitude of TC centre
+	TCinit.TClon = 178.0;//Longitude of TC centre
+
+	TCinit.cP = 900.0; //central pressure hpa
+	TCinit.eP = 1013.0; //Env pressure hpa
+	TCinit.rMax = 40.0; // Radius of maximum wind (km)
+	TCinit.vFm = 15.0; //Foward speed of the storm(m / s)
+	TCinit.thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
+	TCinit.beta = 1.30;
+	TCinit.rho = 1.15;
 
 	int dummy;
 
 	// Below function modifies and call global parameters 
-	dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TClat, TClon,cP, eP, rMax, vFm, thetaFm, beta, rho);
+	dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TCinit);
 
 	CUDA_CHECK(cudaMemcpy(P, P_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
@@ -831,8 +834,8 @@ int main(int argc, char **argv)
 	for (int i = 0; i < 20; i++)
 	{
 		//dummy main loop
-		TClat = TClat + 0.01;
-		dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TClat, TClon, cP, eP, rMax, vFm, thetaFm, beta, rho);
+		TCinit.TClat = TCinit.TClat + 0.01;
+		dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TCinit);
 
 		CUDA_CHECK(cudaMemcpy(P, P_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 		CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));

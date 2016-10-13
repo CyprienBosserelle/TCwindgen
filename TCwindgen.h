@@ -22,6 +22,13 @@ public:
 
 };
 
+class TCparam {
+public:
+	double TClon, TClat, cP, eP, dP, rMax, vFm, thetaFm, beta, rho;
+//double TClat, double TClon, double cP, double eP, double rMax, double vFm, double thetaFm, double beta, double rho
+};
+
+
 
 extern "C" void creatncfile(std::string ncfileout, int nx, int ny, float totaltime, float * xval, float * yval, float *R, float *V, float *Z);
 extern "C" void writestep2nc(std::string ncfileout, int nx, int ny, float totaltime, float *R, float *V, float *Z);
