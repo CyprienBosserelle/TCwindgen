@@ -806,6 +806,10 @@ int main(int argc, char **argv)
 
 	TCparam TCinit;
 
+
+	std::vector<TCparam> TCparamlist = readBSHfile(grid.Trackfile);
+
+	/*
 	TCinit.TClat = -18.0;//Latitude of TC centre
 	TCinit.TClon = 178.0;//Longitude of TC centre
 
@@ -816,6 +820,11 @@ int main(int argc, char **argv)
 	TCinit.thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
 	TCinit.beta = 1.30;
 	TCinit.rho = 1.15;
+	*/
+
+	TCinit = TCparamlist[0];
+
+	std::cout << TCinit.TClat << std::endl;
 
 	int dummy;
 
@@ -829,6 +838,7 @@ int main(int argc, char **argv)
 	if (!grid.Outputncfile.empty())// empty string means no netcdf output
 	{
 		creatncfile(grid.Outputncfile, nx, ny, 0.0f, Gridlon, Gridlat, P, Uw, Vw);
+				
 	}
 
 	for (int i = 0; i < 20; i++)
