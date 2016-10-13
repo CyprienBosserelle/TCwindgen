@@ -1,10 +1,34 @@
-# Comment
+# TCWinGen parameter file v0.0
+# Instruction on how to use this file:
+# Only one parameter per line
+# parameter name should be followed by a space then an equal sign,
+# than teh parameter value and a semicolomn at the end of the value
+# Just like this : parameter = -999.9;
+# or : someparamterter = my string file name;
+# Comments are allowed after the semi-column 
+
+# parameters can be in any order and empty lines are fine 
+
+#to comment a parameter name do it like this: parameter# = -999.9;
+
+The leading # doesn not o anything and is just here for show
+
+ 
+# Grid parameters
 LonMin = 175.0; some other comments
 LonMax = 180.0;
 dlon = 0.005;
-
-
 LatMin = -19.0;
 LatMax = -17.0
 
-trackfile=test.dat;
+# TC parameters
+windprofile=1;
+
+trackfile = test.dat;
+
+# Output files 
+ncoutputfile =test.nc; 
+#delft3Dout# =;
+#SWANout# =;
+
+

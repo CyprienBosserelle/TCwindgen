@@ -2,21 +2,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include <stdio.h>
-#include <math.h>
-
-#include <iostream>
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <string>
-#include <cmath>
-#include <fstream>
-#include <netcdf.h>
-#include <algorithm>
-
-#define pi 3.14159265f
+#include "TCwindgen.h"
 
 
 // Global parameters;
@@ -29,149 +15,9 @@ float * Z, *Z_g; // array for TC vorticity
 float *Uw, *Vw, *Uw_g, *Vw_g, *P, *P_g; // Array of U and V wind and P pressure from the cyclone
 int nx, ny; //grid dimension
 
-class param {
-	public:
-		double LonMin , LonMax , dlon , dlat , LatMin, LatMax;
-
-};
-
-
-extern "C" void creatncfile(char outfile[], int nx, int ny, float totaltime, float * xval, float * yval, float *R, float *V, float *Z)
-{
-	int status;
-	int ncid, xx_dim, yy_dim, time_dim, p_dim;
-	size_t nxx, nyy, nnpart;
-	int  var_dimids[3], var_dimzb[2];
-
-	int R_id, time_id, xx_id, yy_id, V_id, Z_id;
-	
-	nxx = nx;
-	nyy = ny;
-	//nnpart=npart;
-
-	static size_t start[] = { 0, 0, 0 }; // start at first value 
-	static size_t count[] = { 1, ny, nx };
-	static size_t zbstart[] = { 0, 0 }; // start at first value 
-	static size_t zbcount[] = { ny, nx };
-	//static size_t pstart[] = {0, 0}; // start at first value 
-	// 	static size_t pcount[] = {1, npart};
-	static size_t tst[] = { 0 };
-	static size_t xstart[] = { 0 }; // start at first value 
-	static size_t xcount[] = { nx };
-	
-	static size_t ystart[] = { 0 }; // start at first value 
-	static size_t ycount[] = { ny };
-
-
-	
-	//create the netcdf dataset
-	status = nc_create(outfile, NC_NOCLOBBER, &ncid);
-
-	//Define dimensions: Name and length
-
-	status = nc_def_dim(ncid, "x", nxx, &xx_dim);
-	status = nc_def_dim(ncid, "y", nyy, &yy_dim);
-	//status = nc_def_dim(ncid, "npart",nnpart,&p_dim);
-	status = nc_def_dim(ncid, "time", NC_UNLIMITED, &time_dim);
-	int tdim[] = { time_dim };
-	int xdim[] = { xx_dim };
-	int ydim[] = { yy_dim };
-	//int pdim[2];
-	//pdim[0]=time_dim;
-	//pdim[1]=p_dim;
-	//define variables: Name, Type,...
-	var_dimids[0] = time_dim;
-	var_dimids[1] = yy_dim;
-	var_dimids[2] = xx_dim;
-	var_dimzb[0] = yy_dim;
-	var_dimzb[1] = xx_dim;
-
-	status = nc_def_var(ncid, "time", NC_FLOAT, 1, tdim, &time_id);
-	status = nc_def_var(ncid, "x", NC_FLOAT, 1, xdim, &xx_id);
-	status = nc_def_var(ncid, "y", NC_FLOAT, 1, ydim, &yy_id);
 
 
 
-	status = nc_def_var(ncid, "P", NC_FLOAT, 3, var_dimids, &R_id);
-	status = nc_def_var(ncid, "U", NC_FLOAT, 3, var_dimids, &V_id);
-	status = nc_def_var(ncid, "V", NC_FLOAT, 3, var_dimids, &Z_id);
-
-	//put attriute: assign attibute values
-	//nc_put_att
-
-	//End definitions: leave define mode
-	status = nc_enddef(ncid);
-
-	//Provide values for variables
-	status = nc_put_var1_float(ncid, time_id, tst, &totaltime);
-	status = nc_put_vara_float(ncid, xx_id, xstart, xcount, xval);
-	status = nc_put_vara_float(ncid, yy_id, ystart, ycount, yval);
-
-	
-	status = nc_put_vara_float(ncid, R_id, start, count, R);
-	status = nc_put_vara_float(ncid, V_id, start, count, V);
-	status = nc_put_vara_float(ncid, Z_id, start, count, Z);
-	// U, V, P are also needed
-
-	//close and save new file
-	status = nc_close(ncid);
-}
-
-
-extern "C" void writestep2nc(char outfile[], int nx, int ny, float totaltime, float *R, float *V, float *Z)
-{
-	int status;
-	int ncid, time_dim, recid;
-	size_t nxx, nyy;
-	int time_id, R_id, V_id, Z_id;
-	static size_t start[] = { 0, 0, 0 }; // start at first value 
-	static size_t count[] = { 1, ny, nx };
-	//static size_t pstart[] = {0, 0}; // start at first value 
-	//	static size_t pcount[] = {1, npart};
-	static size_t tst[] = { 0 };
-
-	nxx = nx;
-	nyy = ny;
-
-
-	static size_t nrec;
-	status = nc_open(outfile, NC_WRITE, &ncid);
-
-	//read id from time dimension
-	status = nc_inq_unlimdim(ncid, &recid);
-	status = nc_inq_dimlen(ncid, recid, &nrec);
-	printf("nrec=%d\n", nrec);
-
-	//read file for variable ids
-	status = nc_inq_varid(ncid, "time", &time_id);
-	
-	status = nc_inq_varid(ncid, "P", &R_id);
-	status = nc_inq_varid(ncid, "U", &V_id);
-	status = nc_inq_varid(ncid, "V", &Z_id);
-	
-	//status = nc_inq_varid(ncid, "xxp", &xxp_id);
-	//status = nc_inq_varid(ncid, "yyp", &yyp_id);
-
-
-	start[0] = nrec;
-	//pstart[0] = nrec;    
-	tst[0] = nrec;
-
-	//Provide values for variables
-	status = nc_put_var1_float(ncid, time_id, tst, &totaltime);
-	
-	status = nc_put_vara_float(ncid, R_id, start, count, R);
-	status = nc_put_vara_float(ncid, V_id, start, count, V);
-	status = nc_put_vara_float(ncid, Z_id, start, count, Z);
-	
-
-
-
-	//close and save
-	status = nc_close(ncid);
-
-
-}
 
 __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TClon, double TClat, float *R, float *lam)
 {
@@ -756,6 +602,8 @@ double Vmax_models(int model, double cP, double eP, double beta, double rho)
 
 int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, double cP, double eP, double rMax, double vFm, double thetaFm, double beta, double rho)
 {
+	//Wrapper for TC generation of Pressure, and Wind feilds
+	
 	//Cyclone parameters
 	//double TClat = -18.0;//Latitude of TC centre
 	//double TClon = 178.0;//Longitude of TC centre
@@ -845,88 +693,11 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, double TClat, double TClon, do
 
 }
 
-std::string findparameter(std::string parameterstr, std::string line)
-{
-	std::size_t found, Numberstart, Numberend;
-	std::string parameternumber;
-	found = line.find(parameterstr);
-	if (found != std::string::npos) // found a line that has Lonmin
-	{
-		//std::cout <<"found LonMin at : "<< found << std::endl;
-		Numberstart = found + parameterstr.length();
-		found = line.find(";");
-		if (found != std::string::npos) // found a line that has Lonmin
-		{
-			Numberend = found;
-		}
-		else
-		{
-			Numberend = line.length();
-		}
-		parameternumber = line.substr(Numberstart, Numberend);
-		
-	}
-	return parameternumber;
-}
-
-param readparamstr(std::string line,param grid)
-{
-	
-	
-	std::string parameterstr, parameternumber;
-
-	parameterstr = "LonMin =";
-	//grid.LonMin = std::stod(parameternumber);
-	parameternumber = findparameter(parameterstr, line);
-
-	if (!parameternumber.empty())
-	{
-		grid.LonMin = std::stod(parameternumber);
-	}
-
-	parameterstr = "LonMax =";
-	//grid.LonMin = std::stod(parameternumber);
-	parameternumber = findparameter(parameterstr, line);
-
-	if (!parameternumber.empty())
-	{
-		grid.LonMax = std::stod(parameternumber);
-	}
-
-	parameterstr = "LatMin =";
-	//grid.LonMin = std::stod(parameternumber);
-	parameternumber = findparameter(parameterstr, line);
-
-	if (!parameternumber.empty())
-	{
-		grid.LatMin = std::stod(parameternumber);
-	}
-
-	parameterstr = "LatMax =";
-	//grid.LonMin = std::stod(parameternumber);
-	parameternumber = findparameter(parameterstr, line);
-
-	if (!parameternumber.empty())
-	{
-		grid.LatMax = std::stod(parameternumber);
-	}
-
-	parameterstr = "dlon =";
-	//grid.LonMin = std::stod(parameternumber);
-	parameternumber = findparameter(parameterstr, line);
-
-	if (!parameternumber.empty())
-	{
-		grid.dlon = std::stod(parameternumber);
-	}
-
-	return grid;
-}
 
 int main(int argc, char **argv)
 {
 	param grid;
-	// Grid parameters
+	// initialise parameters
 	grid.LonMin = 177.0;
 	grid.LonMax = 180.0;
 
@@ -936,16 +707,38 @@ int main(int argc, char **argv)
 	grid.LatMin = -19.0;
 	grid.LatMax = -17.0;
 	
+	grid.Trackfile = "";
+	grid.Outputncfile = "";
+
+
 	
 	std::ifstream fs("TC_param.txt");
+
+	if (fs.fail()){
+		std::cerr << "TC_param.txt file could not be opened" << std::endl;
+		exit(1);
+	}
+
 	std::string line;
 	while (std::getline(fs, line))
-	{
-		//Get param
-		grid = readparamstr(line, grid);
+	{		
 		//std::cout << line << std::endl;
+		
+		//Get param or skip empty lines
+		if (!line.empty())
+		{
+			grid = readparamstr(line, grid);
+			//std::cout << line << std::endl;
+		}
+
 	}
-	std::cout <<"Class test: " <<grid.LonMin << std::endl;
+	fs.close();
+	
+	
+	//std::cout.precision(7);
+	//std::cout << "Class test: "<< std::fixed << grid.LonMin << std::endl;
+
+	
 
 
 	nx = ceil((grid.LonMax - grid.LonMin) / grid.dlon); // in case not an exact match then LonMax is extended
@@ -1030,7 +823,10 @@ int main(int argc, char **argv)
 	CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Uw, Uw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 
-	creatncfile("test.nc", nx, ny, 0.0f, Gridlon, Gridlat, P, Uw, Vw);
+	if (!grid.Outputncfile.empty())// empty string means no netcdf output
+	{
+		creatncfile(grid.Outputncfile, nx, ny, 0.0f, Gridlon, Gridlat, P, Uw, Vw);
+	}
 
 	for (int i = 0; i < 20; i++)
 	{
@@ -1042,11 +838,11 @@ int main(int argc, char **argv)
 		CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 		CUDA_CHECK(cudaMemcpy(Uw, Uw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 
-		writestep2nc("test.nc", nx, ny, (i+1)*600.0f, P, Uw, Vw);
+		if (!grid.Outputncfile.empty())// empty string means no netcdf output
+		{
+			writestep2nc(grid.Outputncfile, nx, ny, (i + 1)*600.0f, P, Uw, Vw);
+		}
 	}
 	
 	
-
-
-
 }
