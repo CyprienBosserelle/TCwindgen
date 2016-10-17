@@ -14,6 +14,7 @@
 #include <netcdf.h>
 #include <algorithm>
 #include <vector>
+#include <ctime>
 
 #define pi 3.14159265f
 
@@ -21,6 +22,7 @@
 class param {
 public:
 	double LonMin, LonMax, dlon, dlat, LatMin, LatMax;
+	tm datestart, dateend;
 	std::string Trackfile, Outputncfile;
 
 };
@@ -28,6 +30,7 @@ public:
 class TCparam {
 public:
 	double TClon, TClat, cP, eP, dP, rMax, vFm, thetaFm, beta, rho;
+	tm datetime;
 //double TClat, double TClon, double cP, double eP, double rMax, double vFm, double thetaFm, double beta, double rho
 };
 
@@ -41,3 +44,6 @@ std::vector<TCparam> readBSHfile(std::string BSHfilename);
 TCparam readBSHline(std::string line);
 void split(const std::string &s, char delim, std::vector<std::string> &elems);
 std::vector<std::string> split(const std::string &s, char delim);
+std::string trim(const std::string& str, const std::string& whitespace);
+template <class T> const T& max(const T& a, const T& b);
+template <class T> const T& min(const T& a, const T& b);

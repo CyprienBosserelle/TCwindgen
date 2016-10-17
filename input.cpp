@@ -23,7 +23,7 @@ std::string findparameter(std::string parameterstr, std::string line)
 		//std::cout << parameternumber << std::endl;
 
 	}
-	return parameternumber;
+	return trim(parameternumber," ");
 }
 
 param readparamstr(std::string line, param grid)
@@ -98,6 +98,44 @@ param readparamstr(std::string line, param grid)
 		grid.Outputncfile = parametervalue;
 		//std::cout << grid.Outputfile << std::endl;
 	}
+
+	//grid.datestart
+	parameterstr = "datestart =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		//need check that string is 15 character long 
+		grid.datestart.tm_year=std::stoi(parametervalue.substr(0,4))-1900; // starting from 1900
+		grid.datestart.tm_mon = std::stoi(parametervalue.substr(4, 2)) - 1; //0 to 11
+		grid.datestart.tm_mday = std::stoi(parametervalue.substr(6, 2));
+		grid.datestart.tm_hour = std::stoi(parametervalue.substr(9, 2));
+		grid.datestart.tm_min = std::stoi(parametervalue.substr(11, 2));
+
+		grid.datestart.tm_sec = std::stoi(parametervalue.substr(13, 2));
+
+
+
+
+		//std::cout << grid.Outputfile << std::endl;
+	}
+	parameterstr = "dateend =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		//need to check that string is 15 character long 
+		grid.dateend.tm_year = std::stoi(parametervalue.substr(0, 4)) - 1900; // starting from 1900
+		grid.dateend.tm_mon = std::stoi(parametervalue.substr(4, 2)) - 1; //0 to 11
+		grid.dateend.tm_mday = std::stoi(parametervalue.substr(6, 2));
+		grid.dateend.tm_hour = std::stoi(parametervalue.substr(9, 2));
+		grid.dateend.tm_min = std::stoi(parametervalue.substr(11, 2));
+
+		grid.dateend.tm_sec = std::stoi(parametervalue.substr(13, 2));
+
+
+
+
+		//std::cout << grid.Outputfile << std::endl;
+	}
 	return grid;
 }
 
@@ -113,7 +151,7 @@ std::vector<TCparam> readBSHfile(std::string BSHfilename)
 
 	TCparinline.cP = 900.0; //central pressure hpa
 	TCparinline.eP = 1013.0; //Env pressure hpa
-	TCparinline.rMax = 40.0; // Radius of maximum wind (km)
+	TCparinline.rMax = 47.0; // Radius of maximum wind (km)
 	TCparinline.vFm = 15.0; //Foward speed of the storm(m / s)
 	TCparinline.thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
 	TCparinline.beta = 1.30;
@@ -173,7 +211,15 @@ TCparam readBSHline(std::string line)
 	TCparinline.thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
 	TCparinline.beta = 1.30;
 	TCparinline.rho = 1.15;
+	//TCparinline.datetime.sec
+	std::string parametervalue = x[2];
+	TCparinline.datetime.tm_year = std::stoi(parametervalue.substr(0, 4)) - 1900; // starting from 1900
+	TCparinline.datetime.tm_mon = std::stoi(parametervalue.substr(4, 2)) - 1; //0 to 11
+	TCparinline.datetime.tm_mday = std::stoi(parametervalue.substr(6, 2));
+	TCparinline.datetime.tm_hour = std::stoi(parametervalue.substr(8, 2));
+	TCparinline.datetime.tm_min = 0;
 
+	TCparinline.datetime.tm_sec = 0;
 	
 	//Read Latitude of TC centre
 	std::string Latstring=x[6];
@@ -188,24 +234,34 @@ TCparam readBSHline(std::string line)
 		TCparinline.TClat = std::stod(Latstrnum) / 10.0;
 	}
 		
+	
 	//read Longitude of TC centre
 	std::string Lonstring = x[7];
 	std::string Lonstrnum = Lonstring.substr(0, Lonstring.length() - 1);
 	found = Lonstring.find("W");
 	if (found != std::string::npos) // found a line that has Lonmin
 	{
-		TCparinline.TClon = std::stod(Lonstrnum) / 10.0 * -1.0;//
+		TCparinline.TClon = 360.0 - std::stod(Lonstrnum) / 10.0;//
 	}
 	else
 	{
-		TCparinline.TClon = std::stod(Lonstrnum) / 10.0 *-1.0;
+		TCparinline.TClon = std::stod(Lonstrnum) / 10.0;
 	}
 	
+	
+
+
 
 	TCparinline.cP = std::stod(x[9]) ; //central pressure hpa
 	TCparinline.eP = 1013.0; //Env pressure hpa
 	TCparinline.rMax = std::stod(x[19])*1.852; // Radius of maximum wind (km)
+	if (TCparinline.rMax < 0.1)
+	{
+		TCparinline.rMax = 47.0; //default is set to the mean value estimated by :
+		//S. A. Hsu and Zhongde Yana (Spring 1998). "A Note on the Radius of Maximum Winds for Hurricanes". Journal of Coastal Research. Coastal Education & Research Foundation, Inc. 12 (2): 667–668. JSTOR 4298820.
+	}
 	TCparinline.vFm = std::stod(x[26])*0.5144444; //Foward speed of the storm(m / s)
+	// if the forward speed is 0.0 it should be calculated again
 	TCparinline.thetaFm = std::stod(x[25])*1.0; //Forward direction of the storm(geographic bearing, positive clockwise);
 	//TCparinline.beta = 1.30;
 	//TCparinline.rho = 1.15;
@@ -229,4 +285,22 @@ std::vector<std::string> split(const std::string &s, char delim) {
 	std::vector<std::string> elems;
 	split(s, delim, elems);
 	return elems;
+}
+
+std::string trim(const std::string& str, const std::string& whitespace)
+{
+	const auto strBegin = str.find_first_not_of(whitespace);
+	if (strBegin == std::string::npos)
+		return ""; // no content
+
+	const auto strEnd = str.find_last_not_of(whitespace);
+	const auto strRange = strEnd - strBegin + 1;
+
+	return str.substr(strBegin, strRange);
+}
+template <class T> const T& max(const T& a, const T& b) {
+	return (a<b) ? b : a;     // or: return comp(a,b)?b:a; for version (2)
+}
+template <class T> const T& min(const T& a, const T& b) {
+	return !(b<a) ? a : b;     // or: return !comp(b,a)?a:b; for version (2)
 }

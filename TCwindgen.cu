@@ -697,6 +697,8 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, TCparam TCpara)
 int main(int argc, char **argv)
 {
 	param grid;
+	TCparam TCinit, TCnext;
+
 	// initialise parameters
 	grid.LonMin = 177.0;
 	grid.LonMax = 180.0;
@@ -710,6 +712,30 @@ int main(int argc, char **argv)
 	grid.Trackfile = "";
 	grid.Outputncfile = "";
 
+
+
+
+	double endtime;// total duration  of simulation
+	double totaltime = 0.0; //
+
+	//tm datestart, dateend;
+	grid.datestart.tm_sec = 0;
+	grid.datestart.tm_min = 0;
+	grid.datestart.tm_hour = 12;
+	grid.datestart.tm_mday = 20;
+	grid.datestart.tm_mon = 1;
+	grid.datestart.tm_year = 2016 - 1900;
+
+
+	grid.dateend.tm_sec = 0;
+	grid.dateend.tm_min = 0;
+	grid.dateend.tm_hour = 12;
+	grid.dateend.tm_mday = 22;
+	grid.dateend.tm_mon = 1;
+	grid.dateend.tm_year = 2016 - 1900;
+
+
+	
 
 	
 	std::ifstream fs("TC_param.txt");
@@ -734,9 +760,10 @@ int main(int argc, char **argv)
 	}
 	fs.close();
 	
+	endtime = difftime(mktime(&grid.dateend), mktime(&grid.datestart));
 	
-	//std::cout.precision(7);
-	//std::cout << "Class test: "<< std::fixed << grid.LonMin << std::endl;
+	std::cout.precision(7);
+	std::cout << "endtime: " << std::fixed << endtime << std::endl;
 
 	
 
@@ -804,10 +831,10 @@ int main(int argc, char **argv)
 	int Vmaxmodeltype = 1;; //not yet  implemented. Default is Holland 
 
 
-	TCparam TCinit;
+	
 
 
-	std::vector<TCparam> TCparamlist = readBSHfile(grid.Trackfile);
+	std::vector<TCparam> TCtrack = readBSHfile(grid.Trackfile);
 
 	/*
 	TCinit.TClat = -18.0;//Latitude of TC centre
@@ -822,9 +849,29 @@ int main(int argc, char **argv)
 	TCinit.rho = 1.15;
 	*/
 
-	TCinit = TCparamlist[0];
+	//Scan when to start the calculations
 
-	std::cout << TCinit.TClat << std::endl;
+	std::cout << TCtrack.size() << std::endl;
+
+
+	for (int i = 0; i < TCtrack.size(); i++)
+	{
+		double dtime;
+		dtime = difftime(mktime(&TCtrack[i].datetime), mktime(&grid.datestart));
+
+		std::cout << dtime << std::endl;
+		if (dtime > 0.0)
+		{
+			TCinit = TCtrack[max(i-1,0)];
+			TCnext = TCtrack[max(i - 1, 0) + 1];
+			break;
+		}
+
+	}
+
+	//TCinit = TCtrack[58];
+
+	
 
 	int dummy;
 
@@ -841,10 +888,12 @@ int main(int argc, char **argv)
 				
 	}
 
-	for (int i = 0; i < 20; i++)
+	while (totaltime<=endtime)
 	{
+		totaltime = totaltime + dt;
+		TCinit = TCtrack[35];
 		//dummy main loop
-		TCinit.TClat = TCinit.TClat + 0.01;
+		//TCinit.TClat = TCinit.TClat + 0.01;
 		dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TCinit);
 
 		CUDA_CHECK(cudaMemcpy(P, P_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
@@ -853,7 +902,7 @@ int main(int argc, char **argv)
 
 		if (!grid.Outputncfile.empty())// empty string means no netcdf output
 		{
-			writestep2nc(grid.Outputncfile, nx, ny, (i + 1)*600.0f, P, Uw, Vw);
+			writestep2nc(grid.Outputncfile, nx, ny, totaltime, P, Uw, Vw);
 		}
 	}
 	
