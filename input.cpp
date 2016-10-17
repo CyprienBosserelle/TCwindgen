@@ -212,7 +212,9 @@ TCparam readBSHline(std::string line)
 	TCparinline.beta = 1.30;
 	TCparinline.rho = 1.15;
 	//TCparinline.datetime.sec
-	std::string parametervalue = x[2];
+	std::string parametervalue = trim(x[2]," ");
+
+	//std::cout << x[2] << std::endl;
 	TCparinline.datetime.tm_year = std::stoi(parametervalue.substr(0, 4)) - 1900; // starting from 1900
 	TCparinline.datetime.tm_mon = std::stoi(parametervalue.substr(4, 2)) - 1; //0 to 11
 	TCparinline.datetime.tm_mday = std::stoi(parametervalue.substr(6, 2));
@@ -221,6 +223,10 @@ TCparam readBSHline(std::string line)
 
 	TCparinline.datetime.tm_sec = 0;
 	
+
+
+
+
 	//Read Latitude of TC centre
 	std::string Latstring=x[6];
 	std::string Latstrnum = Latstring.substr(0, Latstring.length()-1);

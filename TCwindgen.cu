@@ -765,7 +765,7 @@ int main(int argc, char **argv)
 	std::cout.precision(7);
 	std::cout << "endtime: " << std::fixed << endtime << std::endl;
 
-	
+	//std::cout << asctime(&grid.dateend) << std::endl;
 
 
 	nx = ceil((grid.LonMax - grid.LonMin) / grid.dlon); // in case not an exact match then LonMax is extended
@@ -851,15 +851,30 @@ int main(int argc, char **argv)
 
 	//Scan when to start the calculations
 
-	std::cout << TCtrack.size() << std::endl;
+	//std::cout << TCtrack.size() << std::endl;
 
 
 	for (int i = 0; i < TCtrack.size(); i++)
 	{
 		double dtime;
+
+		tm tctime;
+		
+		tctime.tm_year = TCtrack[i].datetime.tm_year;
+		tctime.tm_mon = TCtrack[i].datetime.tm_mon;
+		tctime.tm_mday = TCtrack[i].datetime.tm_mday;
+		tctime.tm_hour = TCtrack[i].datetime.tm_hour;
+		tctime.tm_min = TCtrack[i].datetime.tm_min;
+		tctime.tm_sec = TCtrack[i].datetime.tm_sec;
+
 		dtime = difftime(mktime(&TCtrack[i].datetime), mktime(&grid.datestart));
 
 		std::cout << dtime << std::endl;
+
+		std::cout << TCtrack[i].datetime.tm_year << std::endl;
+
+		//asctime(&tctime)
+
 		if (dtime > 0.0)
 		{
 			TCinit = TCtrack[max(i-1,0)];
@@ -869,8 +884,7 @@ int main(int argc, char **argv)
 
 	}
 
-	//TCinit = TCtrack[58];
-
+	
 	
 
 	int dummy;
