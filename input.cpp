@@ -136,6 +136,15 @@ param readparamstr(std::string line, param grid)
 
 		//std::cout << grid.Outputfile << std::endl;
 	}
+
+	parameterstr = "dt =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		//need to check that string is 15 character long 
+		grid.dt = std::stod(parametervalue);
+		//std::cout << grid.Outputfile << std::endl;
+	}
 	return grid;
 }
 

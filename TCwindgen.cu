@@ -738,7 +738,7 @@ int main(int argc, char **argv)
 	grid.Trackfile = "";
 	grid.Outputncfile = "";
 
-
+	grid.dt = 600;
 
 
 	double endtime;// total duration  of simulation
@@ -847,7 +847,7 @@ int main(int argc, char **argv)
 	// First iteration
 	int iteration = 0;
 
-	double dt = 600;// needs to be small enough to make a smooth model
+	//double dt = 600;// needs to be small enough to make a smooth model
 
 	int Profilemodeltype = 1;//not yet implemented. Default is Double Holland 
 	int WindFieldmodeltype = 1;//not yet  implemented. Default is McConochie for the wind field
@@ -920,7 +920,7 @@ int main(int argc, char **argv)
 	
 
 	int dummy;
-	TCinterp = interpparam(TCnext, TCprev, 0.0-difftime(mktime(&TCprev.datetime), mktime(&grid.datestart)));
+	TCinterp = interpparam(TCnext, TCprev, totaltime-difftime(mktime(&TCprev.datetime), mktime(&grid.datestart)));
 	// Below function modifies and call global parameters 
 	dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TCinit);
 
@@ -936,7 +936,7 @@ int main(int argc, char **argv)
 
 	while (totaltime<=endtime)
 	{
-		totaltime = totaltime + dt;
+		totaltime = totaltime + grid.dt;
 		dtime = difftime(mktime(&TCnext.datetime), mktime(&grid.datestart));
 		if (totaltime > dtime)
 		{

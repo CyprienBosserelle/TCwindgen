@@ -21,7 +21,7 @@
 
 class param {
 public:
-	double LonMin, LonMax, dlon, dlat, LatMin, LatMax;
+	double LonMin, LonMax, dlon, dlat, LatMin, LatMax, dt;
 	tm datestart, dateend;
 	std::string Trackfile, Outputncfile;
 
