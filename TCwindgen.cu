@@ -692,12 +692,38 @@ int GenPUV(int Profile, int Field, int Vmaxmodel, TCparam TCpara)
 	return 0;
 
 }
+TCparam interpparam(TCparam TCnext, TCparam TCprev, double time)
+{
+	TCparam TCinterp;
+	
+	//TCinit.TClat = -18.0;//Latitude of TC centre
+	//TCinit.TClon = 178.0;//Longitude of TC centre
+
+	//TCinit.cP = 900.0; //central pressure hpa
+	//TCinit.eP = 1013.0; //Env pressure hpa
+	//TCinit.rMax = 40.0; // Radius of maximum wind (km)
+	//TCinit.vFm = 15.0; //Foward speed of the storm(m / s)
+	//TCinit.thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
+	//TCinit.beta = 1.30;
+	//TCinit.rho = 1.15;
+	TCinterp.TClat = interptime(TCnext.TClat, TCprev.TClat, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.TClon = interptime(TCnext.TClon, TCprev.TClon, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.cP = interptime(TCnext.cP, TCprev.cP, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.eP = interptime(TCnext.eP, TCprev.eP, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.rMax = interptime(TCnext.rMax, TCprev.rMax, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.vFm = interptime(TCnext.vFm, TCprev.vFm, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.thetaFm = interptime(TCnext.thetaFm, TCprev.thetaFm, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.beta = interptime(TCnext.beta, TCprev.beta, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+	TCinterp.rho = interptime(TCnext.rho, TCprev.rho, difftime(mktime(&TCnext.datetime), mktime(&TCprev.datetime)), time);
+
+	return TCinterp;
+}
 
 
 int main(int argc, char **argv)
 {
 	param grid;
-	TCparam TCinit, TCnext;
+	TCparam TCinit, TCnext, TCprev,TCinterp;
 
 	// initialise parameters
 	grid.LonMin = 177.0;
@@ -760,10 +786,7 @@ int main(int argc, char **argv)
 	}
 	fs.close();
 	
-	endtime = difftime(mktime(&grid.dateend), mktime(&grid.datestart));
 	
-	std::cout.precision(7);
-	std::cout << "endtime: " << std::fixed << endtime << std::endl;
 
 	//std::cout << asctime(&grid.dateend) << std::endl;
 
@@ -852,43 +875,52 @@ int main(int argc, char **argv)
 	//Scan when to start the calculations
 
 	//std::cout << TCtrack.size() << std::endl;
+	double dtime;
+	int step = 0;
+	dtime = difftime(mktime(&TCtrack[0].datetime), mktime(&grid.datestart));
+
+	//make sure datestart and end are set to resonable values 
+	if (dtime > 0.0)
+	{
+		grid.datestart = TCtrack[0].datetime;
+		std::cout << "datestart had to be changed to first date in track: " << asctime(&TCtrack[0].datetime) << std::endl;
+	}
+
+
+	dtime = difftime(mktime(&TCtrack[TCtrack.size()-1].datetime), mktime(&grid.dateend));
+	if (dtime <0.0)
+	{
+		grid.dateend = TCtrack[TCtrack.size() - 1].datetime;
+		std::cout << " dateend had to be changed to last date in track: " << asctime(&TCtrack[TCtrack.size() - 1].datetime) << std::endl;
+	}
 
 
 	for (int i = 0; i < TCtrack.size(); i++)
 	{
-		double dtime;
-
-		tm tctime;
 		
-		tctime.tm_year = TCtrack[i].datetime.tm_year;
-		tctime.tm_mon = TCtrack[i].datetime.tm_mon;
-		tctime.tm_mday = TCtrack[i].datetime.tm_mday;
-		tctime.tm_hour = TCtrack[i].datetime.tm_hour;
-		tctime.tm_min = TCtrack[i].datetime.tm_min;
-		tctime.tm_sec = TCtrack[i].datetime.tm_sec;
+
 
 		dtime = difftime(mktime(&TCtrack[i].datetime), mktime(&grid.datestart));
-
-		std::cout << dtime << std::endl;
-
-		std::cout << TCtrack[i].datetime.tm_year << std::endl;
-
-		//asctime(&tctime)
 
 		if (dtime > 0.0)
 		{
 			TCinit = TCtrack[max(i-1,0)];
+			step = max(i - 1, 0);
+			TCprev = TCinit;
 			TCnext = TCtrack[max(i - 1, 0) + 1];
 			break;
 		}
 
 	}
 
-	
+	endtime = difftime(mktime(&grid.dateend), mktime(&grid.datestart));
+
+	std::cout.precision(7);
+	std::cout << "endtime: " << std::fixed << endtime << std::endl;
 	
 
 	int dummy;
-
+	TCinterp = interpparam(TCnext, TCprev, 0.0-difftime(mktime(&TCprev.datetime), mktime(&grid.datestart)));
 	// Below function modifies and call global parameters 
 	dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TCinit);
 
@@ -905,10 +937,20 @@ int main(int argc, char **argv)
 	while (totaltime<=endtime)
 	{
 		totaltime = totaltime + dt;
-		TCinit = TCtrack[35];
+		dtime = difftime(mktime(&TCnext.datetime), mktime(&grid.datestart));
+		if (totaltime > dtime)
+		{
+			step++;
+			TCnext = TCprev;
+			TCprev = TCtrack[step];
+		}
+
+		TCinterp = interpparam(TCnext, TCprev, totaltime - difftime(mktime(&TCprev.datetime), mktime(&grid.datestart)));
+
+
 		//dummy main loop
 		//TCinit.TClat = TCinit.TClat + 0.01;
-		dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TCinit);
+		dummy = GenPUV(Profilemodeltype, WindFieldmodeltype, Vmaxmodeltype, TCinterp);
 
 		CUDA_CHECK(cudaMemcpy(P, P_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 		CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
@@ -918,6 +960,9 @@ int main(int argc, char **argv)
 		{
 			writestep2nc(grid.Outputncfile, nx, ny, totaltime, P, Uw, Vw);
 		}
+		
+		
+		
 	}
 	
 	

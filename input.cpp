@@ -304,9 +304,17 @@ std::string trim(const std::string& str, const std::string& whitespace)
 
 	return str.substr(strBegin, strRange);
 }
+
 template <class T> const T& max(const T& a, const T& b) {
 	return (a<b) ? b : a;     // or: return comp(a,b)?b:a; for version (2)
 }
+
 template <class T> const T& min(const T& a, const T& b) {
 	return !(b<a) ? a : b;     // or: return !comp(b,a)?a:b; for version (2)
 }
+
+double interptime(double next, double prev, double timenext, double time)
+{
+	return prev + (time)/(timenext)*(next - prev) ;
+}
+//windv = windvold + (totaltime - rtwind)*(windvnew - windvold) / (windtime - rtwind);

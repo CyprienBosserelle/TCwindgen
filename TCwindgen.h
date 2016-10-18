@@ -47,3 +47,4 @@ std::vector<std::string> split(const std::string &s, char delim);
 std::string trim(const std::string& str, const std::string& whitespace);
 template <class T> const T& max(const T& a, const T& b);
 template <class T> const T& min(const T& a, const T& b);
+double interptime(double next, double prev, double timenext, double time);
