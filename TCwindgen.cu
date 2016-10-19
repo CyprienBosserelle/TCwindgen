@@ -21,7 +21,7 @@ int nx, ny; //grid dimension
 
 __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TClon, double TClat, float *R, float *lam)
 {
-	//
+	//haversine formula
 	unsigned int ix = blockIdx.x*blockDim.x + threadIdx.x;
 	unsigned int iy = blockIdx.y*blockDim.y + threadIdx.y;
 	unsigned int i = ix + iy*nx;
@@ -35,7 +35,7 @@ __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TCl
 		float dlon = (Gridlon[ix] - TClon)*pi / 180.0f;
 		float a = sinf(dlat / 2.0f)*sinf(dlat / 2.0f) + cosf(lat1)*cosf(lat2)*sinf(dlon / 2.0f)*sinf(dlon / 2.0f);
 		float c = 2.0f * atan2f(sqrtf(a), sqrtf(1.0f - a));
-		R[i] = c*Rearth/100.0f;//convert to km
+		R[i] = c*Rearth/1000.0f;//convert to km
 
 		float x = sinf(dlon)*cosf(lat2);
 		float y = cosf(lat1)*sinf(lat2) - sinf(lat1)*cosf(lat2)*cosf(dlon);
@@ -859,6 +859,7 @@ int main(int argc, char **argv)
 
 	std::vector<TCparam> TCtrack = readBSHfile(grid.Trackfile);
 
+	TCtrack = checkTCtrack(TCtrack); //chaeck foreward speed and direction
 	/*
 	TCinit.TClat = -18.0;//Latitude of TC centre
 	TCinit.TClon = 178.0;//Longitude of TC centre
