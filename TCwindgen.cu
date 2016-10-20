@@ -853,25 +853,23 @@ int main(int argc, char **argv)
 
 	//std::cout << TCtrack.size() << std::endl;
 
+	double dtime;
+	dtime = difftime(mktime(&TCtrack[0].datetime), mktime(&grid.datestart));
+
+	if (dtime < 0.0)
+	{
+		grid.datestart = TCtrack[0].datetime;
+		std::cout << "datestart cannot start before the first "
+	}
+
 
 	for (int i = 0; i < TCtrack.size(); i++)
 	{
-		double dtime;
-
-		tm tctime;
-		
-		tctime.tm_year = TCtrack[i].datetime.tm_year;
-		tctime.tm_mon = TCtrack[i].datetime.tm_mon;
-		tctime.tm_mday = TCtrack[i].datetime.tm_mday;
-		tctime.tm_hour = TCtrack[i].datetime.tm_hour;
-		tctime.tm_min = TCtrack[i].datetime.tm_min;
-		tctime.tm_sec = TCtrack[i].datetime.tm_sec;
-
 		dtime = difftime(mktime(&TCtrack[i].datetime), mktime(&grid.datestart));
 
-		std::cout << dtime << std::endl;
+		//std::cout << dtime << std::endl;
 
-		std::cout << TCtrack[i].datetime.tm_year << std::endl;
+		//std::cout << TCtrack[i].datetime.tm_year << std::endl;
 
 		//asctime(&tctime)
 
