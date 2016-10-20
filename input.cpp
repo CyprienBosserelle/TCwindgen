@@ -99,6 +99,24 @@ param readparamstr(std::string line, param grid)
 		//std::cout << grid.Outputfile << std::endl;
 	}
 
+	//
+	parameterstr = "SWANout =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		grid.SWANout = parametervalue;
+		//std::cout << grid.Outputfile << std::endl;
+	}
+
+	//
+	parameterstr = "Delft3Dout =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		grid.Delft3Dout = parametervalue;
+		//std::cout << grid.Outputfile << std::endl;
+	}
+
 	//grid.datestart
 	parameterstr = "datestart =";
 	parametervalue = findparameter(parameterstr, line);

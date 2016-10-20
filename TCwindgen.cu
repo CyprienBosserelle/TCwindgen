@@ -934,6 +934,13 @@ int main(int argc, char **argv)
 		creatncfile(grid.Outputncfile, nx, ny, 0.0f, Gridlon, Gridlat, P, Uw, Vw);
 				
 	}
+	if (!grid.SWANout.empty())
+	{
+		//
+		createSWANwindfile(grid.SWANout, nx, ny, Uw, Vw);
+
+	}
+	
 
 	while (totaltime<=endtime)
 	{
@@ -960,6 +967,12 @@ int main(int argc, char **argv)
 		if (!grid.Outputncfile.empty())// empty string means no netcdf output
 		{
 			writestep2nc(grid.Outputncfile, nx, ny, totaltime, P, Uw, Vw);
+		}
+		if (!grid.SWANout.empty())
+		{
+			//
+			writeSWANWindstep(grid.SWANout, nx, ny, Uw, Vw);
+
 		}
 		
 		
