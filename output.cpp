@@ -148,21 +148,23 @@ void createSWANwindfile(std::string SWANfileOut, int nx, int ny,float *U, float 
 		std::cerr << SWANfileOut << "file could not be opened" << std::endl;
 		exit(1);
 	}
-	fs.precision(2);
 	
-	for (int i = 0; i < nx; i++)
+	
+	for (int j = 0; j < ny; j++)
 	{
-		for (int j = 0; j < ny; j++)
+		for (int i = 0; i < nx; i++)
 		{
-			fs << U[i + j*nx] << "\t";
+			//fs.precision(2);
+			fs << std::fixed << std::setprecision(2) << U[i + j*nx] << "\t";
 		}
 		fs << "\n";
 	}
-	for (int i = 0; i < nx; i++)
+	for (int j = 0; j < ny; j++)
 	{
-		for (int j = 0; j < ny; j++)
+		for (int i = 0; i < nx; i++)
 		{
-			fs << V[i + j*nx] << "\t";
+			//fs.precision(2);
+			fs << std::fixed << std::setprecision(2) << V[i + j*nx] << "\t";
 		}
 		fs << "\n";
 	}
@@ -180,21 +182,21 @@ void writeSWANWindstep(std::string SWANfileOut, int nx, int ny, float *U, float 
 		exit(1);
 	}
 	
-	for (int i = 0; i < nx; i++)
+	for (int j = 0; j < ny; j++)
 	{
-		for (int j = 0; j < ny; j++)
+		for (int i = 0; i < nx; i++)
 		{
-			fs.precision(2);
-			fs << U[i + j*nx] << "\t";
+			
+			fs << std::fixed << std::setprecision(2) << U[i + j*nx] << "\t";
 		}
 		fs << "\n";
 	}
-	for (int i = 0; i < nx; i++)
+	for (int j = 0; j < ny; j++)
 	{
-		for (int j = 0; j < ny; j++)
+		for (int i = 0; i < nx; i++)
 		{
-			fs.precision(2);
-			fs << V[i + j*nx] << "\t";
+			//fs.precision(2);
+			fs << std::fixed << std::setprecision(2) << V[i + j*nx] << "\t";
 		}
 		fs << "\n";
 	}

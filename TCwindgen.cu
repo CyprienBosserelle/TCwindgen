@@ -883,19 +883,7 @@ int main(int argc, char **argv)
 
 
 	
-	if (dtime < 0.0)
-	{
-		grid.datestart = TCtrack[0].datetime;
-		std::cout << "datestart cannot start before the first " << std::endl;
-	}
-
-
 	
-
-		//std::cout << dtime << std::endl;
-
-		//std::cout << TCtrack[i].datetime.tm_year << std::endl;
-
 	//make sure datestart and end are set to resonable values 
 	if (dtime > 0.0)
 	{
@@ -959,7 +947,7 @@ int main(int argc, char **argv)
 	}
 	
 
-	while (totaltime<=endtime)
+	while (totaltime<endtime) //removed the = here because the setp increment is after the start of the loop...
 	{
 		totaltime = totaltime + grid.dt;
 		dtime = difftime(mktime(&TCnext.datetime), mktime(&grid.datestart));
