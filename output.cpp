@@ -139,3 +139,64 @@ extern "C" void writestep2nc(std::string ncfileout, int nx, int ny, float totalt
 
 
 }
+void createSWANwindfile(std::string SWANfileOut, int nx, int ny,float *U, float *V)
+{
+	//
+	std::ofstream fs(SWANfileOut);
+
+	if (fs.fail()){
+		std::cerr << SWANfileOut << "file could not be opened" << std::endl;
+		exit(1);
+	}
+	fs.precision(2);
+	
+	for (int i = 0; i < nx; i++)
+	{
+		for (int j = 0; j < ny; j++)
+		{
+			fs << U[i + j*nx] << "\t";
+		}
+		fs << "\n";
+	}
+	for (int i = 0; i < nx; i++)
+	{
+		for (int j = 0; j < ny; j++)
+		{
+			fs << V[i + j*nx] << "\t";
+		}
+		fs << "\n";
+	}
+	fs.close();
+}
+
+void writeSWANWindstep(std::string SWANfileOut, int nx, int ny, float *U, float *V)
+{
+	//
+	std::ofstream fs;
+	fs.open(SWANfileOut, std::ios::out | std::ios::app);
+
+	if (fs.fail()){
+		std::cerr << SWANfileOut << "file could not be opened" << std::endl;
+		exit(1);
+	}
+	
+	for (int i = 0; i < nx; i++)
+	{
+		for (int j = 0; j < ny; j++)
+		{
+			fs.precision(2);
+			fs << U[i + j*nx] << "\t";
+		}
+		fs << "\n";
+	}
+	for (int i = 0; i < nx; i++)
+	{
+		for (int j = 0; j < ny; j++)
+		{
+			fs.precision(2);
+			fs << V[i + j*nx] << "\t";
+		}
+		fs << "\n";
+	}
+	fs.close();
+}

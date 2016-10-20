@@ -99,6 +99,24 @@ param readparamstr(std::string line, param grid)
 		//std::cout << grid.Outputfile << std::endl;
 	}
 
+	//
+	parameterstr = "SWANout =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		grid.SWANout = parametervalue;
+		//std::cout << grid.Outputfile << std::endl;
+	}
+
+	//
+	parameterstr = "Delft3Dout =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		grid.Delft3Dout = parametervalue;
+		//std::cout << grid.Outputfile << std::endl;
+	}
+
 	//grid.datestart
 	parameterstr = "datestart =";
 	parametervalue = findparameter(parameterstr, line);
@@ -134,6 +152,15 @@ param readparamstr(std::string line, param grid)
 
 
 
+		//std::cout << grid.Outputfile << std::endl;
+	}
+
+	parameterstr = "dt =";
+	parametervalue = findparameter(parameterstr, line);
+	if (!parametervalue.empty())
+	{
+		//need to check that string is 15 character long 
+		grid.dt = std::stod(parametervalue);
 		//std::cout << grid.Outputfile << std::endl;
 	}
 	return grid;
@@ -277,6 +304,70 @@ TCparam readBSHline(std::string line)
 
 }
 
+std::vector<TCparam> checkTCtrack(std::vector<TCparam> TCtrack)
+{
+	int npt = TCtrack.size();
+	double dist, dtime, theta;
+	// Check if the forward speed is 0.0 it should be calculated again
+	for (int i = 1; i < npt; i++) // first point in track may need to be handled afterward
+	{
+
+		if (TCtrack[i].vFm<0.01)
+		{
+			std::cout << "Recalculating foreward speed..." << std::endl;
+			double Rearth = 6372797.560856;
+			double dlat = (TCtrack[i].TClat - TCtrack[i-1].TClat)*pi / 180.0;
+			double lat1 = TCtrack[i - 1].TClat * pi / 180.0;
+			double lat2 = TCtrack[i].TClat * pi / 180.0;
+
+			double dlon = (TCtrack[i].TClon - TCtrack[i - 1].TClat)*pi / 180.0;
+			double a = sin(dlat / 2.0)*sin(dlat / 2.0) + cos(lat1)*cos(lat2)*sin(dlon / 2.0)*sin(dlon / 2.0);
+			double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+			dist = c*Rearth;
+
+			double x = sin(dlon)*cos(lat2);
+			double y = cos(lat1)*sin(lat2) - sin(lat1)*cos(lat2)*cos(dlon);
+			theta = atan2(y, x)*180.0 / pi;
+
+			dtime = difftime(mktime(&TCtrack[i].datetime), mktime(&TCtrack[i-1].datetime));
+
+			TCtrack[i].vFm = dist / dtime;
+
+
+		}
+
+		if (TCtrack[i].thetaFm = 0.0)
+		{
+			std::cout << "Recalculating foreward heading..." << std::endl;
+			double Rearth = 6372797.560856;
+			double dlat = (TCtrack[i].TClat - TCtrack[i - 1].TClat)*pi / 180.0;
+			double lat1 = TCtrack[i - 1].TClat * pi / 180.0;
+			double lat2 = TCtrack[i].TClat * pi / 180.0;
+
+			double dlon = (TCtrack[i].TClon - TCtrack[i - 1].TClat)*pi / 180.0;
+			double a = sin(dlat / 2.0)*sin(dlat / 2.0) + cos(lat1)*cos(lat2)*sin(dlon / 2.0)*sin(dlon / 2.0);
+			double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+			dist = c*Rearth;
+
+			double x = sin(dlon)*cos(lat2);
+			double y = cos(lat1)*sin(lat2) - sin(lat1)*cos(lat2)*cos(dlon);
+			theta = atan2(y, x)*180.0 / pi;
+
+			TCtrack[i].thetaFm = theta;
+
+		}
+	}
+	if (TCtrack[0].vFm < 0.01)
+	{
+		TCtrack[0].vFm = TCtrack[1].vFm;
+	}
+	if (TCtrack[0].thetaFm < 0.01)
+	{
+		TCtrack[0].thetaFm = TCtrack[1].thetaFm;
+	}
+	return TCtrack;
+}
+
 void split(const std::string &s, char delim, std::vector<std::string> &elems) {
 	std::stringstream ss;
 	ss.str(s);
@@ -304,9 +395,17 @@ std::string trim(const std::string& str, const std::string& whitespace)
 
 	return str.substr(strBegin, strRange);
 }
+
 template <class T> const T& max(const T& a, const T& b) {
 	return (a<b) ? b : a;     // or: return comp(a,b)?b:a; for version (2)
 }
+
 template <class T> const T& min(const T& a, const T& b) {
 	return !(b<a) ? a : b;     // or: return !comp(b,a)?a:b; for version (2)
 }
+
+double interptime(double next, double prev, double timenext, double time)
+{
+	return prev + (time)/(timenext)*(next - prev) ;
+}
+//windv = windvold + (totaltime - rtwind)*(windvnew - windvold) / (windtime - rtwind);
