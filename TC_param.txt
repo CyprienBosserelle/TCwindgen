@@ -11,24 +11,31 @@
 
 #to comment a parameter name do it like this: parameter# = -999.9;
 
-The leading # doesn not o anything and is just here for show
+The leading # does not do anything and is just here for show
 
  
 # Grid parameters
-LonMin = 175.0; some other comments
-LonMax = 180.0;
-dlon = 0.005;
-LatMin = -19.0;
-LatMax = -17.0
+LonMin = 177.1960; some other comments
+LonMax = 181.9960;
+dlon = 0.008;
+LatMin = -18.4040;
+LatMax = -16.0040
 
 # TC parameters
 windprofile=1;
+trackfile =Track-FromRadar.txt;
 
-trackfile = test.dat;
+# date and Timing
+# date format is yyyymmdd.HHMMSS
+datestart =20160219.193000;
+dateend =20160220.110000;
+
+#timestep in seconds TC parameters will be interpolated to this timestep to generate P U and V
+dt =600; # Default use the track steps but recomended to use 1800s 
 
 # Output files 
-ncoutputfile =test.nc; 
-#delft3Dout# =;
-#SWANout# =;
+ncoutputfile = test.nc ; 
+Delft3Dout =; #NO file extension here 3 files will be created *.amu, *.amv, *.amp
+SWANout =;
 
 
