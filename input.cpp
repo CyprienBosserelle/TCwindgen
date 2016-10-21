@@ -303,6 +303,10 @@ TCparam readtrackline(std::string line)
 	TCparinline.datetime.tm_sec = std::stoi(parametervalue.substr(13, 2));
 
 	TCparinline.TClon = std::stod(x[1]);
+	if (TCparinline.TClon < 0.0)
+	{
+		TCparinline.TClon = 360.0 + TCparinline.TClon;
+	}
 	TCparinline.TClat = std::stod(x[2]);
 	TCparinline.cP = std::stod(x[3]); //central pressure hpa
 	TCparinline.eP = std::stod(x[4]);

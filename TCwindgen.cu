@@ -989,9 +989,9 @@ int main(int argc, char **argv)
 		dtime = difftime(mktime(&TCnext.datetime), mktime(&grid.datestart));
 		if (totaltime > dtime)
 		{
-			step++;
-			TCnext = TCprev;
-			TCprev = TCtrack[step];
+			step = min(step + 1, (int) TCtrack.size());
+			TCprev = TCnext;
+			TCnext = TCtrack[step];
 		}
 
 		TCinterp = interpparam(TCnext, TCprev, totaltime - difftime(mktime(&TCprev.datetime), mktime(&grid.datestart)));
