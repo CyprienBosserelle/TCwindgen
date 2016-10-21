@@ -202,3 +202,175 @@ void writeSWANWindstep(std::string SWANfileOut, int nx, int ny, float *U, float 
 	}
 	fs.close();
 }
+
+void createD3DAtmfile(std::string D3dfileOut, int nx, int ny, double lonmin, double latmin, double dlon, double dlat, tm datestart, float *P, float *U, float *V)
+{
+
+	std::ofstream fsUU, fsVV, fsPP;
+
+	time_t rawtime,dstart;
+	struct tm * timeinfo;
+	char buffer[80];
+
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+
+	strftime(buffer, 80, "%d-%m-%Y ", timeinfo);
+	std::string strtimenow(buffer);
+
+	strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", &datestart); 
+	std::string strdatestart(buffer);
+
+	//std::cout << str;
+
+
+	fsUU.open(D3dfileOut + "_U.amu", std::ios::out | std::ios::trunc);
+	fsVV.open(D3dfileOut + "_V.amv", std::ios::out | std::ios::trunc);
+	fsPP.open(D3dfileOut + "_P.amp", std::ios::out | std::ios::trunc);
+	//
+	if (fsUU.fail() || fsVV.fail() || fsPP.fail()){
+		std::cerr << D3dfileOut << "files could not be opened" << std::endl;
+		exit(1);
+	}
+
+	// write header for U file
+	fsUU << "### START OF HEADER\n";
+	fsUU << "### Created by TCWindgen on " << strtimenow << "\n";
+	fsUU << "### Put other header info Here\n";
+	fsUU << "Fileversion\t=\t1.0\n";
+	fsUU << "filetype\t=\tmeteo_on_equidistant_grid\n";
+	fsUU << "NODATA_value\t=\t-9999.0\n";
+	fsUU << "n_cols\t=\t"<< nx <<"\n";
+	fsUU << "n_rows\t=\t"<< ny <<"\n";
+	fsUU << "grid_unit\t=\tdegree\n";
+	fsUU << "x_llcenter\t=\t" << std::fixed << std::setprecision(7) << lonmin << "\n";
+	fsUU << "y_llcenter\t=\t" << std::fixed << std::setprecision(7) << latmin << "\n";
+	fsUU << "dx\t=\t" << std::fixed << std::setprecision(7) << dlon << "\n";
+	fsUU << "dy\t=\t" << std::fixed << std::setprecision(7) << dlat << "\n";
+	fsUU << "n_quantity\t=\t1\n";
+	fsUU << "quantity1\t=\tx_wind\n";
+	fsUU << "unit1\t=\tm s-1\n";
+	fsUU << "### END OF HEADER\n";
+	fsUU << "TIME = 0 seconds since " << strdatestart << "+00:00\n";
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fsUU << std::fixed << std::setprecision(2) << U[i + j*nx] << "\t";
+		}
+		fsUU << "\n";
+	}
+
+	// write header for V file
+	fsVV << "### START OF HEADER\n";
+	fsVV << "### Created by TCWindgen on " << strtimenow << "\n";
+	fsVV << "### Put other header info Here\n";
+	fsVV << "Fileversion\t=\t1.0\n";
+	fsVV << "filetype\t=\tmeteo_on_equidistant_grid\n";
+	fsVV << "NODATA_value\t=\t-9999.0\n";
+	fsVV << "n_cols\t=\t" << nx << "\n";
+	fsVV << "n_rows\t=\t" << ny << "\n";
+	fsVV << "grid_unit\t=\tdegree\n";
+	fsVV << "x_llcenter\t=\t" << std::fixed << std::setprecision(7) << lonmin << "\n";
+	fsVV << "y_llcenter\t=\t" << std::fixed << std::setprecision(7) << latmin << "\n";
+	fsVV << "dx\t=\t" << std::fixed << std::setprecision(7) << dlon << "\n";
+	fsVV << "dy\t=\t" << std::fixed << std::setprecision(7) << dlat << "\n";
+	fsVV << "n_quantity\t=\t1\n";
+	fsVV << "quantity1\t=\ty_wind\n";
+	fsVV << "unit1\t=\tm s-1\n";
+	fsVV << "### END OF HEADER\n";
+	fsVV << "TIME = 0 seconds since " << strdatestart << "+00:00\n";
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fsVV << std::fixed << std::setprecision(2) << V[i + j*nx] << "\t";
+		}
+		fsVV << "\n";
+	}
+
+	// write header for P file
+	fsPP << "### START OF HEADER\n";
+	fsPP << "### Created by TCWindgen on " << strtimenow << "\n";
+	fsPP << "### Put other header info Here\n";
+	fsPP << "Fileversion\t=\t1.0\n";
+	fsPP << "filetype\t=\tmeteo_on_equidistant_grid\n";
+	fsPP << "NODATA_value\t=\t-9999.0\n";
+	fsPP << "n_cols\t=\t" << nx << "\n";
+	fsPP << "n_rows\t=\t" << ny << "\n";
+	fsPP << "grid_unit\t=\tdegree\n";
+	fsPP << "x_llcenter\t=\t" << std::fixed << std::setprecision(7) << lonmin << "\n";
+	fsPP << "y_llcenter\t=\t" << std::fixed << std::setprecision(7) << latmin << "\n";
+	fsPP << "dx\t=\t" << std::fixed << std::setprecision(7) << dlon << "\n";
+	fsPP << "dy\t=\t" << std::fixed << std::setprecision(7) << dlat << "\n";
+	fsPP << "n_quantity\t=\t1\n";
+	fsPP << "quantity1\t=\tair_pressure\n";
+	fsPP << "unit1\t=\tPa\n";
+	fsPP << "### END OF HEADER\n";
+	fsPP << "TIME = 0 seconds since " << strdatestart << "+00:00\n";
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fsPP << std::fixed << std::setprecision(2) << P[i + j*nx] << "\t";
+		}
+		fsPP << "\n";
+	}
+
+	fsUU.close();
+	fsVV.close();
+	fsPP.close();
+
+
+
+}
+
+void writeD3DAtmstep(std::string D3dfileOut, int nx, int ny, tm datestart,double totaltime, float *P, float *U, float *V)
+{
+	std::ofstream fsUU, fsVV, fsPP;
+	char buffer[80];
+
+	strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", &datestart);
+	std::string strdatestart(buffer);
+
+	fsUU.open(D3dfileOut + "_U.amu", std::ios::out | std::ios::app);
+	fsVV.open(D3dfileOut + "_V.amv", std::ios::out | std::ios::app);
+	fsPP.open(D3dfileOut + "_P.amp", std::ios::out | std::ios::app);
+	//
+	fsUU << "TIME = "<< (int) round(totaltime) <<" seconds since " << strdatestart << "+00:00\n";
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fsUU << std::fixed << std::setprecision(2) << U[i + j*nx] << "\t";
+		}
+		fsUU << "\n";
+	}
+
+	fsVV << "TIME = " << (int)round(totaltime) << " seconds since " << strdatestart << "+00:00\n";
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fsVV << std::fixed << std::setprecision(2) << V[i + j*nx] << "\t";
+		}
+		fsVV << "\n";
+	}
+
+	fsPP << "TIME = " << (int)round(totaltime) << " seconds since " << strdatestart << "+00:00\n";
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fsPP << std::fixed << std::setprecision(2) << P[i + j*nx] << "\t";
+		}
+		fsPP << "\n";
+	}
+
+}

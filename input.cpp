@@ -166,6 +166,62 @@ param readparamstr(std::string line, param grid)
 	return grid;
 }
 
+
+std::vector<TCparam> readtrackfile(std::string trackfilename)
+{
+	//
+	std::vector<TCparam> testTCparamlist;
+
+	TCparam TCparinline;
+
+	TCparinline.TClat = -18.0;//Latitude of TC centre
+	TCparinline.TClon = 178.0;//Longitude of TC centre
+
+	TCparinline.cP = 900.0; //central pressure hpa
+	TCparinline.eP = 1013.0; //Env pressure hpa
+	TCparinline.rMax = 47.0; // Radius of maximum wind (km)
+	TCparinline.vFm = 15.0; //Foward speed of the storm(m / s)
+	TCparinline.thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
+	TCparinline.beta = 1.30;
+	TCparinline.rho = 1.15;
+
+	std::ifstream fs(trackfilename);
+
+	if (fs.fail()){
+		std::cerr << trackfilename << " file could not be opened" << std::endl;
+		exit(1);
+	}
+
+	std::string line;
+	while (std::getline(fs, line))
+	{
+		//std::cout << line << std::endl;
+
+		bool test;
+		test = !line.empty();
+		test = line.substr(0, 1).compare("#") != 0;
+
+
+		// skip empty lines and lines starting with an #
+		if (!line.empty() && line.substr(0,1).compare("#")!=0)
+		{
+			//Data should be in teh format :
+			//BASIN,CY,YYYYMMDDHH,TECHNUM/MIN,TECH,TAU,LatN/S,LonE/W,VMAX,MSLP,TY,RAD,WINDCODE,RAD1,RAD2,RAD3,RAD4,RADP,RRP,MRD,GUSTS,EYE,SUBREGION,MAXSEAS,INITIALS,DIR,SPEED,STORMNAME,DEPTH,SEAS,SEASCODE,SEAS1,SEAS2,SEAS3,SEAS4,USERDEFINED,userdata
+
+			TCparinline = readtrackline(line);
+			testTCparamlist.push_back(TCparinline);
+			//std::cout << line << std::endl;
+		}
+
+	}
+	fs.close();
+
+	return testTCparamlist;
+
+}
+
+
+
 std::vector<TCparam> readBSHfile(std::string BSHfilename)
 {
 	//
@@ -215,6 +271,50 @@ std::vector<TCparam> readBSHfile(std::string BSHfilename)
 
 }
 
+TCparam readtrackline(std::string line)
+{
+	//
+	TCparam TCparinline;
+
+	std::vector<std::string> x = split(line, ',');
+
+	TCparinline.TClat = -18.0;//Latitude of TC centre
+	TCparinline.TClon = 178.0;//Longitude of TC centre
+
+	TCparinline.cP = 900.0; //central pressure hpa
+	TCparinline.eP = 1013.0; //Env pressure hpa
+	TCparinline.rMax = 40.0; // Radius of maximum wind (km)
+	TCparinline.vFm = 15.0; //Foward speed of the storm(m / s)
+	TCparinline.thetaFm = 180.0; //Forward direction of the storm(geographic bearing, positive clockwise);
+	TCparinline.beta = 1.30;
+	TCparinline.rho = 1.15;
+	//TCparinline.datetime.sec
+
+
+
+	std::string parametervalue = trim(x[0], " ");
+
+	TCparinline.datetime.tm_year = std::stoi(parametervalue.substr(0, 4)) - 1900; // starting from 1900
+	TCparinline.datetime.tm_mon = std::stoi(parametervalue.substr(4, 2)) - 1; //0 to 11
+	TCparinline.datetime.tm_mday = std::stoi(parametervalue.substr(6, 2));
+	TCparinline.datetime.tm_hour = std::stoi(parametervalue.substr(9, 2));
+	TCparinline.datetime.tm_min = std::stoi(parametervalue.substr(11, 2));
+
+	TCparinline.datetime.tm_sec = std::stoi(parametervalue.substr(13, 2));
+
+	TCparinline.TClon = std::stod(x[1]);
+	TCparinline.TClat = std::stod(x[2]);
+	TCparinline.cP = std::stod(x[3]); //central pressure hpa
+	TCparinline.eP = std::stod(x[4]);
+	TCparinline.rMax = std::stod(x[5]);
+	TCparinline.vFm = std::stod(x[6]);
+	TCparinline.thetaFm = std::stod(x[7]);
+	TCparinline.beta = std::stod(x[8]);
+	TCparinline.rho = std::stod(x[9]);
+
+	return TCparinline;
+
+}
 
 TCparam readBSHline(std::string line)
 {
@@ -314,16 +414,18 @@ std::vector<TCparam> checkTCtrack(std::vector<TCparam> TCtrack)
 
 		if (TCtrack[i].vFm<0.01)
 		{
-			std::cout << "Recalculating foreward speed..." << std::endl;
+			
 			double Rearth = 6372797.560856;
-			double dlat = (TCtrack[i].TClat - TCtrack[i-1].TClat)*pi / 180.0;
+			
 			double lat1 = TCtrack[i - 1].TClat * pi / 180.0;
 			double lat2 = TCtrack[i].TClat * pi / 180.0;
-
-			double dlon = (TCtrack[i].TClon - TCtrack[i - 1].TClat)*pi / 180.0;
+			double lon1 = TCtrack[i - 1].TClon * pi / 180.0;
+			double lon2 = TCtrack[i].TClon * pi / 180.0;
+			double dlat = (lat2 - lat1);
+			double dlon = (lon2 - lon1);
 			double a = sin(dlat / 2.0)*sin(dlat / 2.0) + cos(lat1)*cos(lat2)*sin(dlon / 2.0)*sin(dlon / 2.0);
 			double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
-			dist = c*Rearth;
+			dist = c*Rearth; // why /100? result is m/s already??
 
 			double x = sin(dlon)*cos(lat2);
 			double y = cos(lat1)*sin(lat2) - sin(lat1)*cos(lat2)*cos(dlon);
@@ -332,28 +434,38 @@ std::vector<TCparam> checkTCtrack(std::vector<TCparam> TCtrack)
 			dtime = difftime(mktime(&TCtrack[i].datetime), mktime(&TCtrack[i-1].datetime));
 
 			TCtrack[i].vFm = dist / dtime;
-
+			std::cout << "Recalculating foreward speed..." << TCtrack[i].vFm << std::endl;
 
 		}
 
-		if (TCtrack[i].thetaFm = 0.0)
+		if (TCtrack[i].thetaFm <= 0.01)
 		{
-			std::cout << "Recalculating foreward heading..." << std::endl;
+			
 			double Rearth = 6372797.560856;
-			double dlat = (TCtrack[i].TClat - TCtrack[i - 1].TClat)*pi / 180.0;
 			double lat1 = TCtrack[i - 1].TClat * pi / 180.0;
 			double lat2 = TCtrack[i].TClat * pi / 180.0;
-
-			double dlon = (TCtrack[i].TClon - TCtrack[i - 1].TClat)*pi / 180.0;
+			double lon1 = TCtrack[i - 1].TClon * pi / 180.0;
+			double lon2 = TCtrack[i].TClon * pi / 180.0;
+			double dlat = (lat2 - lat1);
+			double dlon = (lon2 - lon1);
 			double a = sin(dlat / 2.0)*sin(dlat / 2.0) + cos(lat1)*cos(lat2)*sin(dlon / 2.0)*sin(dlon / 2.0);
 			double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
-			dist = c*Rearth;
+			dist = c*Rearth; // why /100? result is m/s already??
 
 			double x = sin(dlon)*cos(lat2);
 			double y = cos(lat1)*sin(lat2) - sin(lat1)*cos(lat2)*cos(dlon);
 			theta = atan2(y, x)*180.0 / pi;
 
+			//conver angle to bearing
+			theta = 90 - theta;
+
+			if (theta < 0.0)
+			{
+				theta = 360 + theta;
+			}
+
 			TCtrack[i].thetaFm = theta;
+			std::cout << "Recalculating forward heading... " << TCtrack[i].thetaFm << std::endl;
 
 		}
 	}

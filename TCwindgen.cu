@@ -28,14 +28,18 @@ __global__ void Rdist(int nx, int ny, float *Gridlon, float *Gridlat, double TCl
 	if (ix < nx && iy < ny)
 	{
 		float Rearth = 6372797.560856f;
-		float dlat = (Gridlat[iy] - TClat)*pi / 180.0f;
+		
 		float lat1 = TClat * pi / 180.0f;
 		float lat2 = Gridlat[iy] * pi / 180.0f;
+		float lon1 = TClon * pi / 180.0f;
+		float lon2 = Gridlon[ix] * pi / 180.0f;
+
+		float dlat = (lat2 - lat1);
 		
-		float dlon = (Gridlon[ix] - TClon)*pi / 180.0f;
+		float dlon = (lon2 - lon1);
 		float a = sinf(dlat / 2.0f)*sinf(dlat / 2.0f) + cosf(lat1)*cosf(lat2)*sinf(dlon / 2.0f)*sinf(dlon / 2.0f);
 		float c = 2.0f * atan2f(sqrtf(a), sqrtf(1.0f - a));
-		R[i] = c*Rearth/1000.0f;//convert to km
+		R[i] = c*Rearth/1000.0;//convert to km
 
 		float x = sinf(dlon)*cosf(lat2);
 		float y = cosf(lat1)*sinf(lat2) - sinf(lat1)*cosf(lat2)*cosf(dlon);
@@ -855,10 +859,36 @@ int main(int argc, char **argv)
 	int Vmaxmodeltype = 1;; //not yet  implemented. Default is Holland 
 
 
-	
+	// 3 track format are supported bsh, Best track and TCWindgen formatted
+
+	std::vector<TCparam> TCtrack;
+
+	grid.Trackfile.substr(0, 3);
+	std::size_t foundbsh,foundibt;
+	foundbsh = grid.Trackfile.find("bsh");
+	foundibt = grid.Trackfile.find("ibtracs");
 
 
-	std::vector<TCparam> TCtrack = readBSHfile(grid.Trackfile);
+
+	if (foundibt != std::string::npos) // found a line that has Lonmin
+	{
+		std::cout << "ibtracs file not supported yet...exiting" << std::endl;
+		//TCtrack = readIBTfile(grid.Trackfile);
+		exit(1);
+	}
+	else if (foundbsh != std::string::npos) 
+	{
+		std::cout << "Reading bsh track..." << std::endl;
+		TCtrack = readBSHfile(grid.Trackfile);
+	}
+	else
+	{
+		std::cout << "Reading standerdised TC format..." << std::endl;
+		TCtrack = readtrackfile(grid.Trackfile);
+		
+	}
+
+
 
 	TCtrack = checkTCtrack(TCtrack); //chaeck foreward speed and direction
 	/*
@@ -925,6 +955,8 @@ int main(int argc, char **argv)
 	std::cout << "endtime: " << std::fixed << endtime << std::endl;
 	
 
+	//first iteration
+
 	int dummy;
 	TCinterp = interpparam(TCnext, TCprev, totaltime-difftime(mktime(&TCprev.datetime), mktime(&grid.datestart)));
 	// Below function modifies and call global parameters 
@@ -945,8 +977,12 @@ int main(int argc, char **argv)
 		createSWANwindfile(grid.SWANout, nx, ny, Uw, Vw);
 
 	}
-	
+	if (!grid.Delft3Dout.empty())
+	{
+		createD3DAtmfile(grid.Delft3Dout, nx, ny, grid.LonMin, grid.LatMin, grid.dlon, grid.dlat, grid.datestart, P, Uw, Vw);
+	}
 
+	//Main loop
 	while (totaltime<endtime) //removed the = here because the setp increment is after the start of the loop...
 	{
 		totaltime = totaltime + grid.dt;
@@ -971,13 +1007,19 @@ int main(int argc, char **argv)
 
 		if (!grid.Outputncfile.empty())// empty string means no netcdf output
 		{
+			//output standardised NetCDF file
 			writestep2nc(grid.Outputncfile, nx, ny, totaltime, P, Uw, Vw);
 		}
 		if (!grid.SWANout.empty())
 		{
-			//
+			//Output SWAN wind input
 			writeSWANWindstep(grid.SWANout, nx, ny, Uw, Vw);
 
+		}
+		if (!grid.Delft3Dout.empty())
+		{
+			//
+			writeD3DAtmstep(grid.Delft3Dout, nx, ny, grid.datestart, totaltime, P, Uw, Vw);
 		}
 		
 		
