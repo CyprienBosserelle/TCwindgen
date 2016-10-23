@@ -5,15 +5,15 @@
 # than teh parameter value and a semicolomn at the end of the value
 # Just like this : parameter = -999.9;
 # or : someparamterter = my string file name;
-# Comments are allowed after the semi-column 
+# Comments are allowed after the semi-column
 
-# parameters can be in any order and empty lines are fine 
+# parameters can be in any order and empty lines are fine
 
 #to comment a parameter name do it like this: parameter# = -999.9;
 
 The leading # does not do anything and is just here for show
 
- 
+
 # Grid parameters
 LonMin = 177.1960; some other comments
 LonMax = 181.9960;
@@ -27,15 +27,13 @@ trackfile =Track-FromRadar.txt;
 
 # date and Timing
 # date format is yyyymmdd.HHMMSS
-datestart =20160219.193000;
-dateend =20160220.110000;
+datestart =20160219.190000;
+dateend =20160220.220000;
 
 #timestep in seconds TC parameters will be interpolated to this timestep to generate P U and V
-dt =600; # Default use the track steps but recomended to use 1800s 
+dt =1800; # Default use the track steps but recommended to use 1800 or less
 
-# Output files 
-ncoutputfile = test.nc ; 
+# Output files
+ncoutputfile = test.nc ;
 Delft3Dout =; #NO file extension here 3 files will be created *.amu, *.amv, *.amp
 SWANout =;
-
-
