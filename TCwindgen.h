@@ -54,7 +54,9 @@ template <class T> const T& min(const T& a, const T& b);
 double interptime(double next, double prev, double timenext, double time);
 std::vector<TCparam> checkTCtrack(std::vector<TCparam> TCtrack);
 void createSWANwindfile(std::string SWANfileOut, int nx, int ny, float *U, float *V);
+void createSWANwindfileFPF(std::string SWANfileOut, int nx, int ny, float *U, float *V);
 void writeSWANWindstep(std::string SWANfileOut, int nx, int ny, float *U, float *V);
+void writeSWANWindstepFPF(std::string SWANfileOut, int nx, int ny, float *U, float *V);
 void createD3DAtmfile(std::string D3dfileOut, int nx, int ny, double lonmin, double latmin, double dlon, double dlat, tm  datestart, float *P, float *U, float *V);
 void writeD3DAtmstep(std::string D3dfileOut, int nx, int ny, tm datestart, double totaltime, float *P, float *U, float *V);
 

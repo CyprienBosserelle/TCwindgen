@@ -974,7 +974,7 @@ int main(int argc, char **argv)
 	if (!grid.SWANout.empty())
 	{
 		//
-		createSWANwindfile(grid.SWANout, nx, ny, Uw, Vw);
+		createSWANwindfileFPF(grid.SWANout, nx, ny, Uw, Vw);
 
 	}
 	if (!grid.Delft3Dout.empty())
@@ -1013,7 +1013,7 @@ int main(int argc, char **argv)
 		if (!grid.SWANout.empty())
 		{
 			//Output SWAN wind input
-			writeSWANWindstep(grid.SWANout, nx, ny, Uw, Vw);
+			writeSWANWindstepFPF(grid.SWANout, nx, ny, Uw, Vw);
 
 		}
 		if (!grid.Delft3Dout.empty())

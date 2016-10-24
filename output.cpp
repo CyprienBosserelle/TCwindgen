@@ -139,6 +139,33 @@ extern "C" void writestep2nc(std::string ncfileout, int nx, int ny, float totalt
 
 
 }
+
+void createSWANwindfileFPF(std::string SWANfileOut, int nx, int ny, float *U, float *V)
+{
+	FILE * ofile;
+	const char * outfile = SWANfileOut.c_str();
+
+	ofile = fopen(outfile, "w");
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(ofile, "%.2f\t", U[i + j*nx]);
+		}
+		fprintf(ofile, "\n");
+	}
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(ofile, "%.2f\t", V[i + j*nx]);;
+		}
+		fprintf(ofile, "\n");
+	}
+}
 void createSWANwindfile(std::string SWANfileOut, int nx, int ny,float *U, float *V)
 {
 	//
@@ -171,6 +198,33 @@ void createSWANwindfile(std::string SWANfileOut, int nx, int ny,float *U, float 
 	fs.close();
 }
 
+void writeSWANWindstepFPF(std::string SWANfileOut, int nx, int ny, float *U, float *V)
+{
+	//
+	FILE * ofile;
+	const char * outfile = SWANfileOut.c_str();
+
+	ofile = fopen(outfile, "a");
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(ofile, "%.2f\t", U[i + j*nx]);
+		}
+		fprintf(ofile, "\n");
+	}
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(ofile, "%.2f\t", V[i + j*nx]);;
+		}
+		fprintf(ofile, "\n");
+	}
+}
 void writeSWANWindstep(std::string SWANfileOut, int nx, int ny, float *U, float *V)
 {
 	//
