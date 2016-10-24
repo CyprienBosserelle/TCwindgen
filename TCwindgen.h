@@ -59,6 +59,8 @@ void writeSWANWindstep(std::string SWANfileOut, int nx, int ny, float *U, float 
 void writeSWANWindstepFPF(std::string SWANfileOut, int nx, int ny, float *U, float *V);
 void createD3DAtmfile(std::string D3dfileOut, int nx, int ny, double lonmin, double latmin, double dlon, double dlat, tm  datestart, float *P, float *U, float *V);
 void writeD3DAtmstep(std::string D3dfileOut, int nx, int ny, tm datestart, double totaltime, float *P, float *U, float *V);
+void createD3DAtmfileFPF(std::string D3dfileOut, int nx, int ny, double lonmin, double latmin, double dlon, double dlat, tm  datestart, float *P, float *U, float *V);
+void writeD3DAtmstepFPF(std::string D3dfileOut, int nx, int ny, tm datestart, double totaltime, float *P, float *U, float *V);
 
 std::vector<TCparam> readtrackfile(std::string trackfilename);
 TCparam readtrackline(std::string line);

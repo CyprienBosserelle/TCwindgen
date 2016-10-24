@@ -979,7 +979,7 @@ int main(int argc, char **argv)
 	}
 	if (!grid.Delft3Dout.empty())
 	{
-		createD3DAtmfile(grid.Delft3Dout, nx, ny, grid.LonMin, grid.LatMin, grid.dlon, grid.dlat, grid.datestart, P, Uw, Vw);
+		createD3DAtmfileFPF(grid.Delft3Dout, nx, ny, grid.LonMin, grid.LatMin, grid.dlon, grid.dlat, grid.datestart, P, Uw, Vw);
 	}
 
 	//Main loop
@@ -1019,7 +1019,7 @@ int main(int argc, char **argv)
 		if (!grid.Delft3Dout.empty())
 		{
 			//
-			writeD3DAtmstep(grid.Delft3Dout, nx, ny, grid.datestart, totaltime, P, Uw, Vw);
+			writeD3DAtmstepFPF(grid.Delft3Dout, nx, ny, grid.datestart, totaltime, P, Uw, Vw);
 		}
 		
 		

@@ -256,7 +256,127 @@ void writeSWANWindstep(std::string SWANfileOut, int nx, int ny, float *U, float 
 	}
 	fs.close();
 }
+void createD3DAtmfileFPF(std::string D3dfileOut, int nx, int ny, double lonmin, double latmin, double dlon, double dlat, tm datestart, float *P, float *U, float *V)
+{
+	FILE * fsUU, *fsVV, *fsPP;
+	std::string Ufile, Vfile, Pfile;
 
+	Ufile = D3dfileOut + ".amu";
+	Vfile = D3dfileOut + ".amv";
+	Pfile = D3dfileOut + ".amp";
+
+	//const char * outfile = U.c_str();
+
+	fsUU = fopen(Ufile.c_str(), "w");
+	fsVV = fopen(Vfile.c_str(), "w");
+	fsPP = fopen(Pfile.c_str(), "w");
+
+	time_t rawtime, dstart;
+	struct tm * timeinfo;
+	char buffer[80];
+
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+
+	strftime(buffer, 80, "%d-%m-%Y ", timeinfo);
+	std::string strtimenow(buffer);
+
+	strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", &datestart);
+	std::string strdatestart(buffer);
+
+	//std::cout << str;
+
+	// write header for U file
+	fprintf(fsUU ,"### START OF HEADER\n");
+	fprintf(fsUU, "### Created by TCWindgen on %s\n" , strtimenow.c_str() );
+	fprintf(fsUU, "### Put other header info Here\n");
+	fprintf(fsUU, "Fileversion\t=\t1.0\n");
+	fprintf(fsUU, "filetype\t=\tmeteo_on_equidistant_grid\n");
+	fprintf(fsUU, "NODATA_value\t=\t-9999.0\n");
+	fprintf(fsUU , "n_cols\t=\t%i\n" , nx );
+	fprintf(fsUU , "n_rows\t=\t%i\n", ny);
+	fprintf(fsUU , "grid_unit\t=\tdegree\n");
+	fprintf(fsUU , "x_llcenter\t=\t%f\n" ,lonmin );
+	fprintf(fsUU , "y_llcenter\t=\t%f\n" , latmin );
+	fprintf(fsUU , "dx\t=\t%f\n" , dlon );
+	fprintf(fsUU , "dy\t=\t%f\n" , dlat );
+	fprintf(fsUU , "n_quantity\t=\t1\n");
+	fprintf(fsUU , "quantity1\t=\tx_wind\n");
+	fprintf(fsUU , "unit1\t=\tm s-1\n");
+	fprintf(fsUU , "### END OF HEADER\n");
+	fprintf(fsUU , "TIME = 0 seconds since %s+00:00\n" , strdatestart.c_str() );
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(fsUU, "%.2f\t" , U[i + j*nx] );
+		}
+		fprintf(fsUU, "\n");
+	}
+	// write header for V file
+	fprintf(fsVV, "### START OF HEADER\n");
+	fprintf(fsVV, "### Created by TCWindgen on %s\n", strtimenow.c_str());
+	fprintf(fsVV, "### Put other header info Here\n");
+	fprintf(fsVV, "Fileversion\t=\t1.0\n");
+	fprintf(fsVV, "filetype\t=\tmeteo_on_equidistant_grid\n");
+	fprintf(fsVV, "NODATA_value\t=\t-9999.0\n");
+	fprintf(fsVV, "n_cols\t=\t%i\n", nx);
+	fprintf(fsVV, "n_rows\t=\t%i\n", ny);
+	fprintf(fsVV, "grid_unit\t=\tdegree\n");
+	fprintf(fsVV, "x_llcenter\t=\t%f\n", lonmin);
+	fprintf(fsVV, "y_llcenter\t=\t%f\n", latmin);
+	fprintf(fsVV, "dx\t=\t%f\n", dlon);
+	fprintf(fsVV, "dy\t=\t%f\n", dlat);
+	fprintf(fsVV, "n_quantity\t=\t1\n");
+	fprintf(fsVV, "quantity1\t=\ty_wind\n");
+	fprintf(fsVV, "unit1\t=\tm s-1\n");
+	fprintf(fsVV, "### END OF HEADER\n");
+	fprintf(fsVV, "TIME = 0 seconds since %s+00:00\n", strdatestart.c_str());
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(fsVV, "%.2f\t", V[i + j*nx]);
+		}
+		fprintf(fsVV, "\n");
+	}
+	// write header for P file
+	fprintf(fsPP, "### START OF HEADER\n");
+	fprintf(fsPP, "### Created by TCWindgen on %s\n", strtimenow.c_str());
+	fprintf(fsPP, "### Put other header info Here\n");
+	fprintf(fsPP, "Fileversion\t=\t1.0\n");
+	fprintf(fsPP, "filetype\t=\tmeteo_on_equidistant_grid\n");
+	fprintf(fsPP, "NODATA_value\t=\t-9999.0\n");
+	fprintf(fsPP, "n_cols\t=\t%i\n", nx);
+	fprintf(fsPP, "n_rows\t=\t%i\n", ny);
+	fprintf(fsPP, "grid_unit\t=\tdegree\n");
+	fprintf(fsPP, "x_llcenter\t=\t%f\n", lonmin);
+	fprintf(fsPP, "y_llcenter\t=\t%f\n", latmin);
+	fprintf(fsPP, "dx\t=\t%f\n", dlon);
+	fprintf(fsPP, "dy\t=\t%f\n", dlat);
+	fprintf(fsPP, "n_quantity\t=\t1\n");
+	fprintf(fsPP, "quantity1\t=\tair_pressure\n");
+	fprintf(fsPP, "unit1\t=\tPa\n");
+	fprintf(fsPP, "### END OF HEADER\n");
+	fprintf(fsPP, "TIME = 0 seconds since %s+00:00\n", strdatestart.c_str());
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(fsPP, "%.2f\t", P[i + j*nx]);
+		}
+		fprintf(fsPP, "\n");
+	}
+	fclose(fsUU);
+	fclose(fsVV);
+	fclose(fsPP);
+}
 void createD3DAtmfile(std::string D3dfileOut, int nx, int ny, double lonmin, double latmin, double dlon, double dlat, tm datestart, float *P, float *U, float *V)
 {
 
@@ -379,6 +499,64 @@ void createD3DAtmfile(std::string D3dfileOut, int nx, int ny, double lonmin, dou
 	fsPP.close();
 
 
+
+}
+void writeD3DAtmstepFPF(std::string D3dfileOut, int nx, int ny, tm datestart, double totaltime, float *P, float *U, float *V)
+{
+	FILE * fsUU, *fsVV, *fsPP;
+	char buffer[80];
+
+	strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", &datestart);
+	std::string strdatestart(buffer);
+
+	std::string Ufile, Vfile, Pfile;
+
+	Ufile = D3dfileOut + ".amu";
+	Vfile = D3dfileOut + ".amv";
+	Pfile = D3dfileOut + ".amp";
+
+	//const char * outfile = U.c_str();
+
+	fsUU = fopen(Ufile.c_str(), "a");
+	fsVV = fopen(Vfile.c_str(), "a");
+	fsPP = fopen(Pfile.c_str(), "a");
+
+	fprintf(fsUU ,"TIME = %i seconds since %s+00:00\n" ,(int) round(totaltime) , strdatestart.c_str() );
+	fprintf(fsVV, "TIME = %i seconds since %s+00:00\n", (int)round(totaltime), strdatestart.c_str());
+	fprintf(fsPP, "TIME = %i seconds since %s+00:00\n", (int)round(totaltime), strdatestart.c_str());
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(fsUU, "%.2f\t", U[i + j*nx]);
+		}
+		fprintf(fsUU, "\n");
+	}
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(fsPP, "%.2f\t", P[i + j*nx]);
+		}
+		fprintf(fsPP, "\n");
+	}
+
+	for (int j = 0; j < ny; j++)
+	{
+		for (int i = 0; i < nx; i++)
+		{
+			//fs.precision(2);
+			fprintf(fsVV, "%.2f\t", V[i + j*nx]);
+		}
+		fprintf(fsVV, "\n");
+	}
+	fclose(fsUU);
+	fclose(fsVV);
+	fclose(fsPP);
 
 }
 
