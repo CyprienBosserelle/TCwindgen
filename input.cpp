@@ -410,6 +410,7 @@ TCparam readBSHline(std::string line)
 
 std::vector<TCparam> checkTCtrack(std::vector<TCparam> TCtrack)
 {
+	std::ostringstream convert;
 	int npt = TCtrack.size();
 	double dist, dtime, theta;
 	// Check if the forward speed is 0.0 it should be calculated again
@@ -439,6 +440,10 @@ std::vector<TCparam> checkTCtrack(std::vector<TCparam> TCtrack)
 
 			TCtrack[i].vFm = dist / dtime;
 			std::cout << "Recalculating foreward speed..." << TCtrack[i].vFm << std::endl;
+
+			convert << "Recalculating foreward speed for step: " << i << " ; vFm=" << TCtrack[i].vFm << "m/s";
+			write_text_to_log_file(convert.str());
+			convert.str("");
 
 		}
 
@@ -470,6 +475,9 @@ std::vector<TCparam> checkTCtrack(std::vector<TCparam> TCtrack)
 
 			TCtrack[i].thetaFm = theta;
 			std::cout << "Recalculating forward heading... " << TCtrack[i].thetaFm << std::endl;
+			convert << "Recalculating forward heading for step: " << i << " ; thetaFm=" << TCtrack[i].thetaFm << "deg";
+			write_text_to_log_file(convert.str());
+			convert.str("");
 
 		}
 	}

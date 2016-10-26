@@ -39,6 +39,8 @@ public:
 };
 
 
+void write_text_to_log_file(const std::string &text);
+
 
 extern "C" void creatncfile(std::string ncfileout, int nx, int ny, float totaltime, float * xval, float * yval, float *R, float *V, float *Z);
 extern "C" void writestep2nc(std::string ncfileout, int nx, int ny, float totaltime, float *R, float *V, float *Z);

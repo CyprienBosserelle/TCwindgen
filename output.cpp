@@ -1,5 +1,14 @@
 #include "TCwindgen.h"
 
+
+void write_text_to_log_file(const std::string &text)
+{
+	std::ofstream log_file(
+		"TCwindgen_log.txt", std::ios_base::out | std::ios_base::app);
+	log_file << text << std::endl;
+	log_file.close(); //destructoir implicitly does it
+}
+
 extern "C" void creatncfile(std::string ncfileout, int nx, int ny, float totaltime, float * xval, float * yval, float *R, float *V, float *Z)
 {
 	int status;
@@ -107,7 +116,7 @@ extern "C" void writestep2nc(std::string ncfileout, int nx, int ny, float totalt
 	//read id from time dimension
 	status = nc_inq_unlimdim(ncid, &recid);
 	status = nc_inq_dimlen(ncid, recid, &nrec);
-	printf("nrec=%d\n", nrec);
+	//printf("nrec=%d\n", nrec);
 
 	//read file for variable ids
 	status = nc_inq_varid(ncid, "time", &time_id);

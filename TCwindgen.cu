@@ -360,6 +360,7 @@ __global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float th
 	float Ri,Vi;
 	float lami;
 	float thetaMax = 0.0f;
+	float thetaFmRAD = thetaFm*pi / 180.0f;
 
 	float thetaMaxAbsolute, asym, Vsf, phi, Ux, Vy;
 
@@ -377,7 +378,7 @@ __global__ void HubbertWindField(int nx, int ny, float rMax, float vFm, float th
 
 		inflow = inflow * pi / 180.0f;
 
-		thetaMaxAbsolute = thetaFm + thetaMax;
+		thetaMaxAbsolute = thetaFmRAD + thetaMax;
 		asym = vFm * cosf(thetaMaxAbsolute - lami + pi);
 		Vsf = Km * Vi +asym;
 		phi = inflow - lami;
@@ -405,6 +406,7 @@ __global__ void McConochieWindField(int nx, int ny, float rMax, float vMax, floa
 	float thetaMax = 0.0f;
 
 	float thetaMaxAbsolute, asym, Vsf, phi, Ux, Vy,swrf;
+	float thetaFmRAD = thetaFm*pi / 180.0f;
 
 	if (ix < nx && iy < ny)
 	{
@@ -425,7 +427,7 @@ __global__ void McConochieWindField(int nx, int ny, float rMax, float vMax, floa
 		}
 		inflow = inflow*pi / 180.0f;
 
-		thetaMaxAbsolute = thetaFm + thetaMax;
+		thetaMaxAbsolute = thetaFmRAD + thetaMax;
 		phi = inflow - lami;
 
 		asym = (0.5f * (1.0f + cosf(thetaMaxAbsolute - lami)) * vFm * (Vi / vMax));
@@ -468,6 +470,7 @@ __global__ void KepertWindField(int nx, int ny, float rMax, float vMax, float vF
 
 	float A0r, A0i,u0s,v0s,Amr,Ami,ums,vms,Apr,Api,ups,vps;
 	float us, vs, usf, vsf,phi;
+	float thetaFmRAD = thetaFm*pi / 180.0f;
 
 	if (ix < nx && iy < ny)
 	{
@@ -533,8 +536,8 @@ __global__ void KepertWindField(int nx, int ny, float rMax, float vMax, float vF
 		us = u0s + ups + ums;
 		vs = Vi + v0s + vps + vms;
 
-		usf = us + Vt * cosf(lami - thetaFm);
-		vsf = vs - Vt * sinf(lami - thetaFm);
+		usf = us + Vt * cosf(lami - thetaFmRAD);
+		vsf = vs - Vt * sinf(lami - thetaFmRAD);
 		phi = atan2(usf, vsf);
 
 		Uw[i] = (sqrtf(usf*usf + vsf *vsf) * sinf(phi - lami));
@@ -727,8 +730,30 @@ TCparam interpparam(TCparam TCnext, TCparam TCprev, double time)
 
 int main(int argc, char **argv)
 {
+	
 	param grid;
 	TCparam TCinit, TCnext, TCprev,TCinterp;
+	std::ostringstream convert;
+
+	//Logfile header
+	time_t rawtime, dstart;
+	struct tm * timeinfo;
+	char buffer[80];
+
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+
+	strftime(buffer, 80, "%d-%m-%Y %H:%M:%S", timeinfo);
+	std::string strtimenow(buffer);
+
+
+	convert << "TCwindgen v0.0";
+	write_text_to_log_file(convert.str());
+	convert.str("");
+
+	convert << "model started at " << strtimenow;
+	write_text_to_log_file(convert.str());
+	convert.str("");
 
 	// initialise parameters
 	grid.LonMin = 177.0;
@@ -767,12 +792,17 @@ int main(int argc, char **argv)
 
 
 	
+	convert << "Opening TCparam.txt";
+	write_text_to_log_file(convert.str());
+	convert.str("");
 
-	
 	std::ifstream fs("TC_param.txt");
 
 	if (fs.fail()){
 		std::cerr << "TC_param.txt file could not be opened" << std::endl;
+		convert << "TC_param.txt file could not be opened";
+		write_text_to_log_file(convert.str());
+		convert.str("");
 		exit(1);
 	}
 
@@ -791,6 +821,12 @@ int main(int argc, char **argv)
 	}
 	fs.close();
 	
+	convert << "Parameters:";
+	write_text_to_log_file(convert.str());
+	convert.str("");
+
+
+	
 	
 
 	//std::cout << asctime(&grid.dateend) << std::endl;
@@ -800,6 +836,10 @@ int main(int argc, char **argv)
 	ny = ceil((grid.LatMax - grid.LatMin) / grid.dlat);
 
 	std::cout << "nx=" << nx << " ny="<< ny << std::endl;
+	convert << "nx=" << nx << " ny=" << ny ;
+	write_text_to_log_file(convert.str());
+	convert.str("");
+
 	// Allocate on the CPU
 	Gridlon = (float *)malloc(nx*sizeof(float));
 	Gridlat = (float *)malloc(ny*sizeof(float));
@@ -873,17 +913,26 @@ int main(int argc, char **argv)
 	if (foundibt != std::string::npos) // found a line that has Lonmin
 	{
 		std::cout << "ibtracs file not supported yet...exiting" << std::endl;
+		convert << "ibtracs file not supported yet...exiting";
+		write_text_to_log_file(convert.str());
+		convert.str("");
 		//TCtrack = readIBTfile(grid.Trackfile);
 		exit(1);
 	}
 	else if (foundbsh != std::string::npos) 
 	{
 		std::cout << "Reading bsh track..." << std::endl;
+		convert << "Reading bsh track...";
+		write_text_to_log_file(convert.str());
+		convert.str("");
 		TCtrack = readBSHfile(grid.Trackfile);
 	}
 	else
 	{
 		std::cout << "Reading standerdised TC format..." << std::endl;
+		convert << "Reading standerdised TC format...";
+		write_text_to_log_file(convert.str());
+		convert.str("");
 		TCtrack = readtrackfile(grid.Trackfile);
 		
 	}
@@ -919,6 +968,9 @@ int main(int argc, char **argv)
 	{
 		grid.datestart = TCtrack[0].datetime;
 		std::cout << "datestart had to be changed to first date in track: " << asctime(&TCtrack[0].datetime) << std::endl;
+		convert << "datestart had to be changed to first date in track: " << asctime(&TCtrack[0].datetime);
+		write_text_to_log_file(convert.str());
+		convert.str("");
 	}
 
 
@@ -927,6 +979,9 @@ int main(int argc, char **argv)
 	{
 		grid.dateend = TCtrack[TCtrack.size() - 1].datetime;
 		std::cout << " dateend had to be changed to last date in track: " << asctime(&TCtrack[TCtrack.size() - 1].datetime) << std::endl;
+		convert << "dateend had to be changed to last date in track: " << asctime(&TCtrack[TCtrack.size() - 1].datetime);
+		write_text_to_log_file(convert.str());
+		convert.str("");
 	}
 
 
@@ -954,6 +1009,9 @@ int main(int argc, char **argv)
 	std::cout.precision(7);
 	std::cout << "endtime: " << std::fixed << endtime << std::endl;
 	
+	convert << "endtime: " << std::fixed << endtime;
+	write_text_to_log_file(convert.str());
+	convert.str("");
 
 	//first iteration
 
@@ -966,26 +1024,44 @@ int main(int argc, char **argv)
 	CUDA_CHECK(cudaMemcpy(Vw, Vw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 	CUDA_CHECK(cudaMemcpy(Uw, Uw_g, nx*ny*sizeof(float), cudaMemcpyDeviceToHost));
 
+	
+
 	if (!grid.Outputncfile.empty())// empty string means no netcdf output
 	{
+		convert << "Creating Netcdf file... Writing initial step";
+		write_text_to_log_file(convert.str());
+		convert.str("");
 		creatncfile(grid.Outputncfile, nx, ny, 0.0f, Gridlon, Gridlat, P, Uw, Vw);
 				
 	}
 	if (!grid.SWANout.empty())
 	{
 		//
+		convert << "Creating SWAN file... Writing initial step";
+		write_text_to_log_file(convert.str());
+		convert.str("");
 		createSWANwindfileFPF(grid.SWANout, nx, ny, Uw, Vw);
 
 	}
 	if (!grid.Delft3Dout.empty())
 	{
+		convert << "Creating Delft3D file... Writing initial step";
+		write_text_to_log_file(convert.str());
+		convert.str("");
 		createD3DAtmfileFPF(grid.Delft3Dout, nx, ny, grid.LonMin, grid.LatMin, grid.dlon, grid.dlat, grid.datestart, P, Uw, Vw);
 	}
+
+	
 
 	//Main loop
 	while (totaltime<endtime) //removed the = here because the setp increment is after the start of the loop...
 	{
 		totaltime = totaltime + grid.dt;
+
+		convert << "Calculating step: "<< totaltime << "s";
+		write_text_to_log_file(convert.str());
+		convert.str("");
+
 		dtime = difftime(mktime(&TCnext.datetime), mktime(&grid.datestart));
 		if (totaltime > dtime)
 		{
