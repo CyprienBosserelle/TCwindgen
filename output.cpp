@@ -40,7 +40,7 @@ extern "C" void creatncfile(std::string ncfileout, int nx, int ny, float totalti
 
 
 	//create the netcdf dataset
-	status = nc_create(outfile, NC_NOCLOBBER, &ncid);
+	status = nc_create(outfile, NC_NOCLOBBER | NC_NETCDF4, &ncid);
 
 	//Define dimensions: Name and length
 
@@ -48,6 +48,8 @@ extern "C" void creatncfile(std::string ncfileout, int nx, int ny, float totalti
 	status = nc_def_dim(ncid, "y", nyy, &yy_dim);
 	//status = nc_def_dim(ncid, "npart",nnpart,&p_dim);
 	status = nc_def_dim(ncid, "time", NC_UNLIMITED, &time_dim);
+	
+
 	int tdim[] = { time_dim };
 	int xdim[] = { xx_dim };
 	int ydim[] = { yy_dim };
@@ -65,12 +67,52 @@ extern "C" void creatncfile(std::string ncfileout, int nx, int ny, float totalti
 	status = nc_def_var(ncid, "x", NC_FLOAT, 1, xdim, &xx_id);
 	status = nc_def_var(ncid, "y", NC_FLOAT, 1, ydim, &yy_id);
 
+	static char txtname[] = "time";
+	status = nc_put_att_text(ncid, time_id, "standard_name", strlen(txtname), txtname);
+	std::string timestr = "seconds";
+	const char* timeunit = timestr.c_str();
 
+	status = nc_put_att_text(ncid, time_id, "units", strlen(timeunit), timeunit);
+
+	std::string xaxis = "X";
+	std::string yaxis = "Y";
+	status = nc_put_att_text(ncid, xx_id, "axis", xaxis.size(), xaxis.c_str());
+	status = nc_put_att_text(ncid, yy_id, "axis", yaxis.size(), yaxis.c_str());
+
+	int shuffle = 1;
+	int deflate = 1;        // This switches compression on (1) or off (0).
+	int deflate_level = 9;  // This is the compression level in range 1 (less) - 9 (more).
 
 	status = nc_def_var(ncid, "P", NC_FLOAT, 3, var_dimids, &R_id);
-	status = nc_def_var(ncid, "U", NC_FLOAT, 3, var_dimids, &V_id);
-	status = nc_def_var(ncid, "V", NC_FLOAT, 3, var_dimids, &Z_id);
+	std::string Pstdname = "pressure";
+	std::string Plongname = "Atmospheric pressure";
+	std::string Punit = "pa";
 
+	status = nc_put_att_text(ncid, R_id, "standard_name", Pstdname.size(), Pstdname.c_str());
+	status = nc_put_att_text(ncid, R_id, "long_name", Plongname.size(), Plongname.c_str());
+	status = nc_put_att_text(ncid, R_id, "units", Punit.size(), Punit.c_str());
+	nc_def_var_deflate(ncid, R_id, shuffle, deflate, deflate_level);
+
+
+	status = nc_def_var(ncid, "U", NC_FLOAT, 3, var_dimids, &V_id);
+	std::string Ustdname = "uwind";
+	std::string Ulongname = "U Wind";
+	std::string Uunit = "m/s";
+
+	status = nc_put_att_text(ncid, V_id, "standard_name", Ustdname.size(), Ustdname.c_str());
+	status = nc_put_att_text(ncid, V_id, "long_name", Ulongname.size(), Ulongname.c_str());
+	status = nc_put_att_text(ncid, V_id, "units", Uunit.size(), Uunit.c_str());
+	nc_def_var_deflate(ncid, V_id, shuffle, deflate, deflate_level);
+
+	status = nc_def_var(ncid, "V", NC_FLOAT, 3, var_dimids, &Z_id);
+	std::string Vstdname = "vwind";
+	std::string Vlongname = "V Wind";
+	std::string Vunit = "m/s";
+
+	status = nc_put_att_text(ncid, Z_id, "standard_name", Vstdname.size(), Vstdname.c_str());
+	status = nc_put_att_text(ncid, Z_id, "long_name", Vlongname.size(), Vlongname.c_str());
+	status = nc_put_att_text(ncid, Z_id, "units", Vunit.size(), Vunit.c_str());
+	nc_def_var_deflate(ncid, Z_id, shuffle, deflate, deflate_level);
 	//put attriute: assign attibute values
 	//nc_put_att
 
